@@ -579,18 +579,41 @@
     });
   }
 
-  /* Serie de XP por día para los gráficos. */
-  function xpSeries(days) {
+  /* Serie de XP por día. Con `categoryId` devuelve solo esa categoría. */
+  function xpSeries(days, categoryId) {
     days = days || 14;
-    var snap = snapshot();
+    var byDay;
+
+    if (categoryId) {
+      byDay = {};
+      store.get().xp.forEach(function (t) {
+        if (t.category !== categoryId) return;
+        var k = dayKey(t.ts);
+        byDay[k] = (byDay[k] || 0) + (Number(t.amount) || 0);
+      });
+    } else {
+      byDay = snapshot().byDay;
+    }
+
     var out = [];
     var base = startOfDay(Date.now()).getTime();
     for (var i = days - 1; i >= 0; i--) {
       var ts = base - i * DAY;
       var k = dayKey(ts);
-      out.push({ ts: ts, key: k, xp: snap.byDay[k] || 0 });
+      out.push({ ts: ts, key: k, xp: byDay[k] || 0 });
     }
     return out;
+  }
+
+  /* Última actividad registrada (para la cabecera del sistema). */
+  function lastActivity() {
+    var list = store.get().xp;
+    var last = null;
+    for (var i = 0; i < list.length; i++) {
+      var ts = new Date(list[i].ts).getTime();
+      if (last === null || ts > last) last = ts;
+    }
+    return last;
   }
 
   global.DS = global.DS || {};
@@ -615,6 +638,7 @@
     xpSeries: xpSeries,
     streak: streak,
     getStreaks: getStreaks,
+    lastActivity: lastActivity,
     /* eventos */
     on: on,
     emit: emit,

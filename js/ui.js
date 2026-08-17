@@ -181,6 +181,7 @@
     events.forEach(function (ev) {
       if (ev.type === "xp") {
         Toast.show("System", signed(ev.amount) + " XP · " + ev.label);
+        if (current === "dashboard" && global.DS.dashboard) global.DS.dashboard.floatXP(ev.amount);
       } else if (ev.type === "quest") {
         Toast.show(
           "Quest completed",
@@ -204,247 +205,10 @@
 
   /* =========================================================
      ESTADO
+     El contenido lo construye dashboard.js; aquí solo se delega.
      ========================================================= */
   function renderDashboard() {
-    var s = E.snapshot();
-
-    $("[data-name]").textContent = store.get().user.name || "DANI";
-    $("[data-level]").textContent = String(s.level.level).padStart(2, "0");
-    $("[data-rank-badge]").textContent = "Rank " + s.rank;
-
-    setNumber("[data-xp-into]", s.level.xpInto);
-    $("[data-xp-needed]").textContent = s.level.max
-      ? " XP · máximo"
-      : " / " + num(s.level.xpNeeded) + " XP";
-    $("[data-xp-next]").textContent = s.level.max
-      ? ""
-      : num(s.level.xpToNext) + " para LV " + (s.level.level + 1);
-    $("[data-xp-bar]").style.width = s.level.pct + "%";
-
-    setNumber("[data-power]", s.power);
-    $("[data-power-note]").textContent = s.nextRank
-      ? "Rank " + s.nextRank.id + " a " + num(s.nextRank.min) + " power"
-      : "Rank máximo alcanzado";
-
-    /* Hoy */
-    var qs = Q.questStats();
-    var streak = E.streak(null);
-    $("[data-today-date]").textContent = fullDate(Date.now());
-    setNumber("[data-t-today]", s.today, signed);
-    setNumber("[data-t-week]", s.week, signed);
-    $("[data-t-quests]").textContent =
-      qs.completedToday + (qs.activeToday ? "/" + (qs.completedToday + qs.activeToday) : "");
-    var st = $("[data-t-streak]");
-    st.textContent = String(streak.current);
-    st.appendChild(el("small", null, "D"));
-
-    renderArc();
-    renderAlerts();
-    renderStats(s.stats);
-    renderRecent();
-
-    $("[data-stats-note]").textContent = "9 atributos";
-  }
-
-  /* ---------- Current arc ----------
-     El arco es el boss marcado como principal; si no hay ninguno
-     marcado, el activo más avanzado. Cambiarlo es fijar settings.arcId. */
-  function currentArc() {
-    var actives = B.all().filter(function (b) {
-      return b.status !== B.STATUS.DEFEATED;
-    });
-    if (!actives.length) return null;
-
-    var pinned = store.get().settings.arcId;
-    for (var i = 0; i < actives.length; i++) {
-      if (actives[i].id === pinned) return actives[i];
-    }
-    return actives.slice().sort(function (a, b) {
-      return B.progress(b) - B.progress(a);
-    })[0];
-  }
-
-  function renderArc() {
-    var host = $("[data-arc]");
-    host.textContent = "";
-    var boss = currentArc();
-
-    if (!boss) {
-      $("[data-arc-note]").textContent = "";
-      emptyState(
-        host,
-        "Sin arco activo",
-        "Convierte tu objetivo grande en un boss con objetivos medibles.",
-        "Crear boss",
-        function () {
-          go("bosses");
-          $("[data-boss-form]").hidden = false;
-          $("[data-b-name]").focus();
-        }
-      );
-      return;
-    }
-
-    var pct = B.progress(boss);
-    var done = boss.tasks.filter(function (t) {
-      return t.done;
-    }).length;
-
-    $("[data-arc-note]").textContent = boss.difficulty;
-
-    var card = hue(el("div", "arc"), boss.category);
-    var top = el("div", "arc__top");
-    var left = el("div");
-    left.appendChild(el("p", "kicker", C.categoryName(boss.category)));
-    left.appendChild(el("p", "arc__name", boss.name));
-    top.appendChild(left);
-    top.appendChild(el("p", "arc__pct num", Math.round(pct) + "%"));
-    card.appendChild(top);
-
-    var bar = el("div", "bar bar--hue arc__bar");
-    var fill = el("i");
-    fill.style.width = pct + "%";
-    bar.appendChild(fill);
-    card.appendChild(bar);
-
-    var foot = el("div", "arc__foot");
-    foot.appendChild(
-      el(
-        "p",
-        "micro",
-        boss.tasks.length ? done + " de " + boss.tasks.length + " objetivos" : "Sin objetivos"
-      )
-    );
-    var go2 = el("button", "link", "Abrir →");
-    go2.type = "button";
-    go2.addEventListener("click", function () {
-      go("bosses");
-    });
-    foot.appendChild(go2);
-    card.appendChild(foot);
-
-    host.appendChild(card);
-  }
-
-  /* ---------- Avisos ---------- */
-  function renderAlerts() {
-    var host = $("[data-alerts]");
-    host.textContent = "";
-    var recs = R.visibleRecommendations();
-    if (!recs.length) return;
-
-    var head = el("div", "sec");
-    head.appendChild(el("p", "kicker", "System alert"));
-    head.appendChild(el("p", "micro", recs.length === 1 ? "1 aviso" : recs.length + " avisos"));
-    host.appendChild(head);
-
-    recs.forEach(function (rec) {
-      var card = hue(el("div", "alert"), rec.category);
-      card.appendChild(el("p", "alert__kicker", rec.kicker));
-      card.appendChild(el("p", "alert__detail", rec.detail));
-      card.appendChild(el("p", "alert__title", rec.title));
-      card.appendChild(
-        el("p", "alert__xp num", signed(rec.xp) + " XP · " + C.categoryName(rec.category))
-      );
-
-      var actions = el("div", "actions");
-      var ok = el("button", "btn btn--sm", "Aceptar");
-      ok.type = "button";
-      ok.addEventListener("click", function () {
-        var res = R.acceptRecommendation(rec);
-        Toast.show(
-          "System",
-          res.ok
-            ? "Misión creada · " + rec.title
-            : res.reason === "limit"
-            ? "Máximo " + C.LIMITS.dailyQuests + " misiones diarias activas"
-            : "No se pudo crear la misión"
-        );
-      });
-      actions.appendChild(ok);
-
-      var no = el("button", "btn btn--ghost btn--sm", "Descartar");
-      no.type = "button";
-      no.addEventListener("click", function () {
-        R.dismiss(rec.id);
-      });
-      actions.appendChild(no);
-      card.appendChild(actions);
-
-      host.appendChild(card);
-    });
-  }
-
-  /* ---------- Stats ---------- */
-  function renderStats(stats) {
-    var host = $("[data-stats]");
-    host.textContent = "";
-
-    stats.forEach(function (st) {
-      var card = el("div", "stat");
-      card.style.setProperty("--h", st.hue);
-
-      var top = el("div", "stat__top");
-      top.appendChild(el("p", "stat__name", st.stat));
-      top.appendChild(el("p", "stat__lv num", "LV " + String(st.level).padStart(2, "0")));
-      card.appendChild(top);
-
-      var xp = el("p", "stat__xp num");
-      xp.appendChild(document.createTextNode(num(st.levelInto)));
-      xp.appendChild(
-        el("span", null, st.levelNeeded ? " / " + num(st.levelNeeded) + " XP" : " XP")
-      );
-      card.appendChild(xp);
-
-      var bar = el("div", "bar bar--thin bar--hue");
-      var fill = el("i");
-      fill.style.width = (st.xp > 0 ? Math.max(2, st.levelPct) : 0) + "%";
-      bar.appendChild(fill);
-      card.appendChild(bar);
-
-      var foot = el("div", "stat__foot");
-      foot.appendChild(el("span", null, num(st.xp) + " XP totales"));
-
-      var right;
-      if (st.xp === 0) {
-        right = el("span", "delta--flat", "Sin iniciar");
-      } else if (st.neglected) {
-        right = el("span", "delta--idle", st.daysIdle + "D inactivo");
-      } else if (st.growth > 0) {
-        right = el("span", "delta--up", "▲ " + pct1(st.growth) + "% / 7D");
-      } else {
-        right = el("span", "delta--flat", "— 0% / 7D");
-      }
-      foot.appendChild(right);
-      card.appendChild(foot);
-
-      host.appendChild(card);
-    });
-  }
-
-  /* ---------- Actividad reciente ---------- */
-  function renderRecent() {
-    var host = $("[data-recent]");
-    host.textContent = "";
-    var days = E.activityLog({ limitDays: 2 });
-
-    if (!days.length) {
-      emptyState(host, "Sin actividad", "Registra tu primera acción del día.", "Registrar", function () {
-        go("log");
-      });
-      return;
-    }
-
-    var list = el("div", "list");
-    var shown = 0;
-    days.forEach(function (d) {
-      d.items.forEach(function (t) {
-        if (shown >= 5) return;
-        shown++;
-        list.appendChild(entryRow(t, { compact: true }));
-      });
-    });
-    host.appendChild(list);
+    global.DS.dashboard.render($("[data-dash]"));
   }
 
   /* ---------- Rachas (vista de análisis) ---------- */
@@ -1963,7 +1727,28 @@
     go(current);
   }
 
-  global.DS.ui = { go: go, render: render, toast: Toast.show, flash: Flash.push };
+  /* Utilidades compartidas: dashboard.js las usa en lugar de duplicarlas. */
+  global.DS.ui = {
+    go: go,
+    render: render,
+    toast: Toast.show,
+    flash: Flash.push,
+    h: {
+      $: $,
+      $$: $$,
+      el: el,
+      hue: hue,
+      num: num,
+      signed: signed,
+      pct1: pct1,
+      dayLabel: dayLabel,
+      timeLabel: timeLabel,
+      fullDate: fullDate,
+      setNumber: setNumber,
+      emptyState: emptyState,
+      entryRow: entryRow
+    }
+  };
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);

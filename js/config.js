@@ -175,7 +175,7 @@
   var STREAKS = {
     grace: 1,
     tracked: [
-      { id: "daily",     label: "RACHA DIARIA", categories: null },
+      { id: "daily",     label: "DIARIA",      categories: null },
       { id: "physical",  label: "GYM",          categories: ["physical", "combat"] },
       { id: "tech",      label: "TECNOLOGÍA",   categories: ["tech"] },
       { id: "knowledge", label: "ESTUDIO",      categories: ["knowledge"] },

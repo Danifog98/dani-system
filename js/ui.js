@@ -1,7 +1,7 @@
 /* =========================================================
    DANI SYSTEM — interfaz
-   Render + navegación + notificaciones.
-   Aquí no se calcula nada: todo viene de engine.js.
+   Solo presentación: navegación, render y feedback. Ningún
+   cálculo vive aquí; todo viene de engine.js y los motores.
    ========================================================= */
 
 (function (global) {
@@ -18,6 +18,9 @@
   var R = global.DS.recommend;
   var L = global.DS.lock;
 
+  /* =========================================================
+     Utilidades de DOM y formato
+     ========================================================= */
   function $(s, c) {
     return (c || document).querySelector(s);
   }
@@ -30,6 +33,11 @@
     if (text !== undefined) n.textContent = text;
     return n;
   }
+  function hue(node, catId) {
+    var c = C.category(catId);
+    node.style.setProperty("--h", c ? c.hue : 195);
+    return node;
+  }
   function num(n) {
     return Math.round(Number(n) || 0).toLocaleString("es-ES");
   }
@@ -39,7 +47,6 @@
   function pct1(n) {
     return (Number(n) || 0).toFixed(1).replace(".", ",");
   }
-
   function statNames(list) {
     return list
       .map(function (n) {
@@ -49,6 +56,7 @@
   }
 
   var MONTHS = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
+  var DAYS = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
 
   function dayLabel(ts) {
     var d = new Date(ts);
@@ -62,12 +70,15 @@
     var d = new Date(ts);
     return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
   }
+  function fullDate(ts) {
+    var d = new Date(ts);
+    return DAYS[d.getDay()] + " " + d.getDate() + " " + MONTHS[d.getMonth()];
+  }
 
   var reduced =
     global.matchMedia && global.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  /* Contador animado: solo cuando el valor cambia, y nunca si el
-     sistema pide menos movimiento. */
+  /* Cifra que se anima al cambiar de valor. */
   var lastValues = {};
 
   function setNumber(sel, value, format) {
@@ -82,27 +93,39 @@
       return;
     }
 
-    var from = prev;
     var start = 0;
-    var span = 420;
     node.classList.remove("tick");
-    /* reflow para poder repetir la animación */
     void node.offsetWidth;
     node.classList.add("tick");
 
     function frame(ts) {
       if (!start) start = ts;
-      var t = Math.min(1, (ts - start) / span);
+      var t = Math.min(1, (ts - start) / 420);
       var eased = 1 - Math.pow(1 - t, 3);
-      node.textContent = fmt(from + (value - from) * eased);
+      node.textContent = fmt(prev + (value - prev) * eased);
       if (t < 1) global.requestAnimationFrame(frame);
       else node.textContent = fmt(value);
     }
     global.requestAnimationFrame(frame);
   }
 
+  /* Estado vacío: título, subtítulo y una acción. Nunca datos falsos. */
+  function emptyState(host, title, sub, ctaText, onClick) {
+    var box = el("div", "empty");
+    box.appendChild(el("p", "empty__t", title));
+    if (sub) box.appendChild(el("p", "empty__s", sub));
+    if (ctaText) {
+      var b = el("button", "btn btn--auto", ctaText);
+      b.type = "button";
+      b.addEventListener("click", onClick);
+      box.appendChild(b);
+    }
+    host.appendChild(box);
+    return box;
+  }
+
   /* =========================================================
-     Notificaciones
+     Feedback: toasts y overlay de hito
      ========================================================= */
   var Toast = {
     host: null,
@@ -116,16 +139,16 @@
         t.className = "toast toast--out";
         global.setTimeout(function () {
           if (t.parentNode) t.parentNode.removeChild(t);
-        }, 300);
-      }, 2600);
+        }, 280);
+      }, 2500);
     }
   };
 
   var Flash = {
     queue: [],
     busy: false,
-    push: function (kicker, value, sub) {
-      Flash.queue.push([kicker, value, sub]);
+    push: function (kicker, value, sub, variant) {
+      Flash.queue.push([kicker, value, sub, variant]);
       Flash.next();
     },
     next: function () {
@@ -136,257 +159,211 @@
       $("[data-flash-k]").textContent = item[0];
       $("[data-flash-v]").textContent = item[1];
       $("[data-flash-sub]").textContent = item[2] || "";
+      node.className = "flash" + (item[3] ? " flash--" + item[3] : "");
       node.hidden = false;
+
       var close = function () {
         node.hidden = true;
         Flash.busy = false;
         node.removeEventListener("click", close);
         global.setTimeout(function () {
           Flash.next();
-          /* Al terminar la cola de avisos se vuelve al estado. */
           if (!Flash.busy && !Flash.queue.length && current !== "dashboard") go("dashboard");
         }, 120);
       };
       node.addEventListener("click", close);
-      global.setTimeout(close, 1900);
+      global.setTimeout(close, 1600);
     }
   };
 
-  /* Un único punto de escucha de eventos del motor. */
+  /* Un único punto de escucha de los eventos del motor. */
   E.on(function (events) {
     events.forEach(function (ev) {
       if (ev.type === "xp") {
         Toast.show("System", signed(ev.amount) + " XP · " + ev.label);
-      } else if (ev.type === "level") {
-        Flash.push("Level Up", "LEVEL " + ev.to, "Level " + ev.from + " → " + ev.to);
       } else if (ev.type === "quest") {
-        Toast.show("System", (ev.questType === "weekly" ? "Weekly" : "Daily") + " completada · " + ev.title);
+        Toast.show(
+          "Quest completed",
+          (ev.questType === "weekly" ? "Weekly · " : "Daily · ") + ev.title
+        );
+      } else if (ev.type === "level") {
+        Flash.push("Level up", "LV " + ev.to, "Level " + ev.from + " → " + ev.to);
       } else if (ev.type === "rank") {
-        Flash.push("Rank Up", ev.to, "Rank " + ev.from + " → " + ev.to);
+        Flash.push("Rank up", ev.to, "Rank " + ev.from + " → " + ev.to);
       } else if (ev.type === "boss") {
-        Flash.push("Boss Defeated", ev.name, signed(ev.xp) + " XP");
-      } else if (ev.type === "achievement") {
-        Toast.show("Logro desbloqueado", ev.name + " · " + ev.desc);
+        Flash.push("Boss defeated", ev.name, signed(ev.xp) + " XP", "boss");
       } else if (ev.type === "milestone") {
         Flash.push("Milestone", F.fmt(ev.value), "Patrimonio alcanzado");
+      } else if (ev.type === "achievement") {
+        Toast.show("Achievement unlocked", ev.name + " · " + ev.desc);
       } else if (ev.type === "skill") {
-        Toast.show("Skill desbloqueada", ev.name + " · " + ev.desc);
+        Toast.show("Skill unlocked", ev.name + " · " + ev.desc);
       }
     });
   });
 
-  /* Estado vacío con acción: nunca datos de relleno. */
-  function emptyState(host, text, ctaText, onClick) {
-    var card = el("div", "card empty-card");
-    card.appendChild(el("p", "empty", text));
-    if (ctaText) {
-      var b = el("button", "btn btn--ghost empty-card__cta", ctaText);
-      b.type = "button";
-      b.addEventListener("click", onClick);
-      card.appendChild(b);
-    }
-    host.appendChild(card);
-  }
-
   /* =========================================================
-     Dashboard
+     ESTADO
      ========================================================= */
   function renderDashboard() {
     var s = E.snapshot();
 
     $("[data-name]").textContent = store.get().user.name || "DANI";
-    $("[data-level]").textContent = s.level.level;
-
-    var rank = $("[data-rank]");
-    rank.textContent = s.rank;
-    rank.setAttribute("data-len", String(s.rank.length));
+    $("[data-level]").textContent = String(s.level.level).padStart(2, "0");
+    $("[data-rank-badge]").textContent = "Rank " + s.rank;
 
     setNumber("[data-xp-into]", s.level.xpInto);
-    $("[data-xp-needed]").textContent = s.level.max ? "MAX" : num(s.level.xpNeeded);
+    $("[data-xp-needed]").textContent = s.level.max
+      ? " XP · máximo"
+      : " / " + num(s.level.xpNeeded) + " XP";
     $("[data-xp-next]").textContent = s.level.max
-      ? "NIVEL MÁXIMO"
-      : num(s.level.xpToNext) + " XP para el nivel " + (s.level.level + 1);
+      ? ""
+      : num(s.level.xpToNext) + " para LV " + (s.level.level + 1);
     $("[data-xp-bar]").style.width = s.level.pct + "%";
 
     setNumber("[data-power]", s.power);
-    setNumber("[data-xp-total]", s.totalXP);
-    setNumber("[data-xp-today]", s.today, signed);
-    setNumber("[data-xp-week]", s.week, signed);
-    $("[data-month-xp]").textContent = signed(s.month) + " este mes";
-
-    $("[data-rank-next]").textContent = s.nextRank
+    $("[data-power-note]").textContent = s.nextRank
       ? "Rank " + s.nextRank.id + " a " + num(s.nextRank.min) + " power"
-      : "Rank máximo";
+      : "Rank máximo alcanzado";
 
+    /* Hoy */
+    var qs = Q.questStats();
+    var streak = E.streak(null);
+    $("[data-today-date]").textContent = fullDate(Date.now());
+    setNumber("[data-t-today]", s.today, signed);
+    setNumber("[data-t-week]", s.week, signed);
+    $("[data-t-quests]").textContent =
+      qs.completedToday + (qs.activeToday ? "/" + (qs.completedToday + qs.activeToday) : "");
+    var st = $("[data-t-streak]");
+    st.textContent = String(streak.current);
+    st.appendChild(el("small", null, "D"));
+
+    renderArc();
     renderAlerts();
     renderStats(s.stats);
-    renderStreaks();
-    renderChart();
-    renderAnalysis();
+    renderRecent();
+
+    $("[data-stats-note]").textContent = "9 atributos";
   }
 
-  function renderStats(stats) {
-    var host = $("[data-stats]");
-    host.textContent = "";
-
-    stats.forEach(function (st) {
-      var card = el("div", "stat");
-      card.style.setProperty("--h", st.hue);
-
-      var top = el("div", "stat__top");
-      top.appendChild(el("p", "stat__name", st.stat));
-      top.appendChild(el("p", "stat__lv mono", "LV " + String(st.level).padStart(2, "0")));
-      card.appendChild(top);
-
-      card.appendChild(
-        el(
-          "p",
-          "stat__xp mono",
-          st.levelNeeded
-            ? num(st.levelInto) + " / " + num(st.levelNeeded) + " XP"
-            : num(st.xp) + " XP"
-        )
-      );
-
-      var bar = el("div", "stat__bar");
-      var fill = el("i", "stat__fill");
-      fill.style.width = (st.xp > 0 ? Math.max(2, st.levelPct) : 0) + "%";
-      bar.appendChild(fill);
-      card.appendChild(bar);
-
-      var foot = el("div", "stat__foot");
-      foot.appendChild(el("span", null, num(st.xp) + " XP · " + pct1(st.mastery) + "% dominio"));
-
-      var right = el("span", null);
-      if (st.xp === 0) {
-        right.className = "delta--flat";
-        right.textContent = "SIN INICIAR";
-      } else if (st.neglected) {
-        var tag = el("i", "tag-idle", st.daysIdle + "D SIN ACTIVIDAD");
-        right.appendChild(tag);
-      } else {
-        var arrow = st.growth > 0 ? "▲" : "—";
-        right.className = st.growth > 0 ? "delta--up" : "delta--flat";
-        right.textContent = arrow + " " + pct1(st.growth) + "% / 7D";
-      }
-      foot.appendChild(right);
-      card.appendChild(foot);
-
-      host.appendChild(card);
+  /* ---------- Current arc ----------
+     El arco es el boss marcado como principal; si no hay ninguno
+     marcado, el activo más avanzado. Cambiarlo es fijar settings.arcId. */
+  function currentArc() {
+    var actives = B.all().filter(function (b) {
+      return b.status !== B.STATUS.DEFEATED;
     });
+    if (!actives.length) return null;
+
+    var pinned = store.get().settings.arcId;
+    for (var i = 0; i < actives.length; i++) {
+      if (actives[i].id === pinned) return actives[i];
+    }
+    return actives.slice().sort(function (a, b) {
+      return B.progress(b) - B.progress(a);
+    })[0];
   }
 
-  function drawChart(host, xs, series) {
-    var max = series.reduce(function (m, d) {
-      return Math.max(m, d.xp);
-    }, 0);
+  function renderArc() {
+    var host = $("[data-arc]");
     host.textContent = "";
-    xs.textContent = "";
-    var step = series.length > 20 ? 5 : 2;
+    var boss = currentArc();
 
-    series.forEach(function (d, i) {
-      var col = el("div", "chart__col");
-      var bar = el("i", "chart__bar");
-      bar.style.height = (max > 0 ? Math.max(2, (d.xp / max) * 100) : 2) + "%";
-      if (!d.xp) bar.setAttribute("data-zero", "1");
-      bar.title = num(d.xp) + " XP";
-      col.appendChild(bar);
-      host.appendChild(col);
-
-      var day = new Date(d.ts).getDate();
-      xs.appendChild(
-        el("span", null, i % step === 0 || i === series.length - 1 ? String(day) : "")
+    if (!boss) {
+      $("[data-arc-note]").textContent = "";
+      emptyState(
+        host,
+        "Sin arco activo",
+        "Convierte tu objetivo grande en un boss con objetivos medibles.",
+        "Crear boss",
+        function () {
+          go("bosses");
+          $("[data-boss-form]").hidden = false;
+          $("[data-b-name]").focus();
+        }
       );
-    });
-  }
-
-  function renderChart() {
-    drawChart($("[data-chart]"), $("[data-chart-x]"), E.xpSeries(14));
-  }
-
-  function renderAnalysis() {
-    var a = E.getAnalytics("month");
-    var host = $("[data-analysis]");
-    host.textContent = "";
-
-    if (!a.snapshot.entries) {
-      host.textContent = "";
-      var p = el("p", "empty", "Sin datos · registra tu primera acción");
-      host.appendChild(p);
       return;
     }
 
-    var rows = [
-      ["Más fuerte", a.strongest ? a.strongest.stat + " · LV " + a.strongest.level : "—"],
-      ["Más débil", a.weakest ? a.weakest.stat + " · LV " + a.weakest.level : "—"],
-      [
-        "Mayor crecimiento",
-        a.fastest && a.fastest.growth > 0
-          ? a.fastest.stat + " · +" + pct1(a.fastest.growth) + "% / 7D"
-          : "—"
-      ],
-      ["Problemas resueltos", num(a.problemsSolved) + " este mes"],
-      ["Categorías abandonadas", a.idle.length ? statNames(a.idle) : "Ninguna"]
-    ];
+    var pct = B.progress(boss);
+    var done = boss.tasks.filter(function (t) {
+      return t.done;
+    }).length;
 
-    if (a.untouched.length) {
-      rows.push(["Sin iniciar", statNames(a.untouched)]);
-    }
+    $("[data-arc-note]").textContent = boss.difficulty;
 
-    rows.forEach(function (r, i) {
-      var row = el("div", "entry");
-      if (i === rows.length - 1) row.style.borderBottom = "0";
-      var main = el("div", "entry__main");
-      main.appendChild(el("p", "entry__meta", r[0]));
-      main.appendChild(el("p", "entry__title entry__title--wrap", r[1]));
-      row.appendChild(main);
-      host.appendChild(row);
+    var card = hue(el("div", "arc"), boss.category);
+    var top = el("div", "arc__top");
+    var left = el("div");
+    left.appendChild(el("p", "kicker", C.categoryName(boss.category)));
+    left.appendChild(el("p", "arc__name", boss.name));
+    top.appendChild(left);
+    top.appendChild(el("p", "arc__pct num", Math.round(pct) + "%"));
+    card.appendChild(top);
+
+    var bar = el("div", "bar bar--hue arc__bar");
+    var fill = el("i");
+    fill.style.width = pct + "%";
+    bar.appendChild(fill);
+    card.appendChild(bar);
+
+    var foot = el("div", "arc__foot");
+    foot.appendChild(
+      el(
+        "p",
+        "micro",
+        boss.tasks.length ? done + " de " + boss.tasks.length + " objetivos" : "Sin objetivos"
+      )
+    );
+    var go2 = el("button", "link", "Abrir →");
+    go2.type = "button";
+    go2.addEventListener("click", function () {
+      go("bosses");
     });
+    foot.appendChild(go2);
+    card.appendChild(foot);
+
+    host.appendChild(card);
   }
 
-  /* =========================================================
-     Alertas del sistema (recomendaciones)
-     ========================================================= */
+  /* ---------- Avisos ---------- */
   function renderAlerts() {
     var host = $("[data-alerts]");
     host.textContent = "";
     var recs = R.visibleRecommendations();
     if (!recs.length) return;
 
-    var head = el("div", "section-head");
-    head.appendChild(el("p", "label", "System alert"));
-    head.appendChild(el("p", "label", recs.length === 1 ? "1 aviso" : recs.length + " avisos"));
+    var head = el("div", "sec");
+    head.appendChild(el("p", "kicker", "System alert"));
+    head.appendChild(el("p", "micro", recs.length === 1 ? "1 aviso" : recs.length + " avisos"));
     host.appendChild(head);
 
     recs.forEach(function (rec) {
-      var cat = C.category(rec.category);
-      var card = el("div", "alert");
-      card.style.setProperty("--h", cat ? cat.hue : 200);
-
+      var card = hue(el("div", "alert"), rec.category);
       card.appendChild(el("p", "alert__kicker", rec.kicker));
       card.appendChild(el("p", "alert__detail", rec.detail));
       card.appendChild(el("p", "alert__title", rec.title));
       card.appendChild(
-        el("p", "alert__reward mono", signed(rec.xp) + " XP · " + C.categoryName(rec.category))
+        el("p", "alert__xp num", signed(rec.xp) + " XP · " + C.categoryName(rec.category))
       );
 
-      var actions = el("div", "alert__actions");
-      var ok = el("button", "btn", "Aceptar quest");
+      var actions = el("div", "actions");
+      var ok = el("button", "btn btn--sm", "Aceptar");
       ok.type = "button";
       ok.addEventListener("click", function () {
         var res = R.acceptRecommendation(rec);
         Toast.show(
           "System",
           res.ok
-            ? "Quest creada · " + rec.title
+            ? "Misión creada · " + rec.title
             : res.reason === "limit"
-            ? "Máximo " + C.LIMITS.dailyQuests + " daily quests activas"
-            : "No se pudo crear la quest"
+            ? "Máximo " + C.LIMITS.dailyQuests + " misiones diarias activas"
+            : "No se pudo crear la misión"
         );
       });
       actions.appendChild(ok);
 
-      var no = el("button", "btn btn--ghost", "Descartar");
+      var no = el("button", "btn btn--ghost btn--sm", "Descartar");
       no.type = "button";
       no.addEventListener("click", function () {
         R.dismiss(rec.id);
@@ -398,66 +375,136 @@
     });
   }
 
+  /* ---------- Stats ---------- */
+  function renderStats(stats) {
+    var host = $("[data-stats]");
+    host.textContent = "";
+
+    stats.forEach(function (st) {
+      var card = el("div", "stat");
+      card.style.setProperty("--h", st.hue);
+
+      var top = el("div", "stat__top");
+      top.appendChild(el("p", "stat__name", st.stat));
+      top.appendChild(el("p", "stat__lv num", "LV " + String(st.level).padStart(2, "0")));
+      card.appendChild(top);
+
+      var xp = el("p", "stat__xp num");
+      xp.appendChild(document.createTextNode(num(st.levelInto)));
+      xp.appendChild(
+        el("span", null, st.levelNeeded ? " / " + num(st.levelNeeded) + " XP" : " XP")
+      );
+      card.appendChild(xp);
+
+      var bar = el("div", "bar bar--thin bar--hue");
+      var fill = el("i");
+      fill.style.width = (st.xp > 0 ? Math.max(2, st.levelPct) : 0) + "%";
+      bar.appendChild(fill);
+      card.appendChild(bar);
+
+      var foot = el("div", "stat__foot");
+      foot.appendChild(el("span", null, num(st.xp) + " XP totales"));
+
+      var right;
+      if (st.xp === 0) {
+        right = el("span", "delta--flat", "Sin iniciar");
+      } else if (st.neglected) {
+        right = el("span", "delta--idle", st.daysIdle + "D inactivo");
+      } else if (st.growth > 0) {
+        right = el("span", "delta--up", "▲ " + pct1(st.growth) + "% / 7D");
+      } else {
+        right = el("span", "delta--flat", "— 0% / 7D");
+      }
+      foot.appendChild(right);
+      card.appendChild(foot);
+
+      host.appendChild(card);
+    });
+  }
+
+  /* ---------- Actividad reciente ---------- */
+  function renderRecent() {
+    var host = $("[data-recent]");
+    host.textContent = "";
+    var days = E.activityLog({ limitDays: 2 });
+
+    if (!days.length) {
+      emptyState(host, "Sin actividad", "Registra tu primera acción del día.", "Registrar", function () {
+        go("log");
+      });
+      return;
+    }
+
+    var list = el("div", "list");
+    var shown = 0;
+    days.forEach(function (d) {
+      d.items.forEach(function (t) {
+        if (shown >= 5) return;
+        shown++;
+        list.appendChild(entryRow(t, { compact: true }));
+      });
+    });
+    host.appendChild(list);
+  }
+
+  /* ---------- Rachas (vista de análisis) ---------- */
   function renderStreaks() {
     var host = $("[data-streaks]");
+    if (!host) return;
     host.textContent = "";
     E.getStreaks().forEach(function (s) {
-      var box = el("div", "streak" + (s.current > 0 ? " streak--on" : ""));
-      box.appendChild(el("p", "streak__k", s.label));
-      var v = el("p", "streak__v mono");
-      v.appendChild(document.createTextNode(String(s.current)));
+      var box = el("div", "tile" + (s.current > 0 ? " tile--accent" : ""));
+      box.appendChild(el("p", "tile__k", s.label));
+      var v = el("p", "tile__v num", String(s.current));
       v.appendChild(el("small", null, "D · MAX " + s.best));
       box.appendChild(v);
       host.appendChild(box);
     });
-
-    var qs = Q.questStats();
-    var todayTotal = qs.completedToday + qs.activeToday;
-    $("[data-quest-slots]").textContent = todayTotal
-      ? qs.completedToday + "/" + todayTotal + " misiones hoy"
-      : "sin misiones hoy";
   }
 
   /* =========================================================
-     Quests
+     MISIONES
      ========================================================= */
-  function questCard(q) {
-    var cat = C.category(q.category);
+  function missionCard(q) {
     var done = q.status === Q.STATUS.COMPLETED;
     var dead = q.status === Q.STATUS.FAILED || q.status === Q.STATUS.SKIPPED;
-    var card = el("div", "quest" + (done ? " quest--done" : dead ? " quest--dead" : ""));
-    card.style.setProperty("--h", cat ? cat.hue : 200);
+    var card = hue(
+      el("div", "mission" + (done ? " mission--done" : dead ? " mission--dead" : "")),
+      q.category
+    );
 
-    var top = el("div", "quest__top");
+    var top = el("div", "mission__top");
     var left = el("div");
-    left.appendChild(el("p", "quest__title", q.title));
-    var bits = [C.categoryName(q.category), q.difficulty];
-    if (q.recurring) bits.push("RECURRENTE");
-    if (done && q.completedAt) bits.push("HECHA " + timeLabel(q.completedAt));
-    if (dead) bits.push(q.status);
-    left.appendChild(el("p", "quest__meta", bits.join(" · ")));
+    left.appendChild(el("p", "mission__kicker", C.categoryName(q.category)));
+    left.appendChild(el("p", "mission__title", q.title));
     top.appendChild(left);
-    top.appendChild(el("p", "quest__xp mono", signed(q.xp) + " XP"));
+    top.appendChild(el("p", "mission__xp num", signed(q.xp) + " XP"));
     card.appendChild(top);
 
-    if (q.description) card.appendChild(el("p", "quest__desc", q.description));
+    var bits = [q.difficulty];
+    if (q.recurring) bits.push("Recurrente");
+    if (done && q.completedAt) bits.push("Hecha " + timeLabel(q.completedAt));
+    if (dead) bits.push(q.status === Q.STATUS.SKIPPED ? "Saltada" : "Fallada");
+    card.appendChild(el("p", "mission__meta", bits.join(" · ")));
+
+    if (q.description) card.appendChild(el("p", "mission__desc", q.description));
 
     if (q.target > 1) {
-      var wrap = el("div", "quest__progress");
+      var wrap = el("div", "mission__progress");
       var bar = el("div", "bar bar--thin");
-      var fill = el("i", "bar__fill");
+      var fill = el("i");
       fill.style.width = Math.min(100, (q.progress / q.target) * 100) + "%";
       bar.appendChild(fill);
       wrap.appendChild(bar);
-      wrap.appendChild(el("span", "quest__count mono", q.progress + "/" + q.target));
+      wrap.appendChild(el("span", "mission__count num", q.progress + "/" + q.target));
       card.appendChild(wrap);
     }
 
-    if (!done && !dead) {
-      var actions = el("div", "quest__actions");
+    var actions = el("div", "actions");
 
+    if (!done && !dead) {
       if (q.target > 1) {
-        var plus = el("button", "btn btn--ghost", "+1");
+        var plus = el("button", "btn btn--ghost btn--sm", "+1");
         plus.type = "button";
         plus.addEventListener("click", function () {
           Q.addProgress(q.id, 1);
@@ -465,48 +512,41 @@
         actions.appendChild(plus);
       }
 
-      var comp = el("button", "btn", "Completar");
+      var comp = el("button", "btn btn--sm", "Completar");
       comp.type = "button";
       comp.addEventListener("click", function () {
         Q.completeQuest(q.id);
       });
       actions.appendChild(comp);
 
-      var skip = el("button", "btn btn--ghost", "Saltar");
+      var skip = el("button", "btn btn--ghost btn--sm", "Saltar");
       skip.type = "button";
       skip.addEventListener("click", function () {
         Q.skipQuest(q.id);
-        Toast.show("System", "Quest saltada");
+        Toast.show("System", "Misión saltada");
       });
       actions.appendChild(skip);
-
-      card.appendChild(actions);
     }
 
-    var del = el("button", "icon-x", "✕");
+    var del = el("button", "icon-btn", "✕");
     del.type = "button";
-    del.setAttribute("aria-label", "Eliminar quest");
+    del.setAttribute("aria-label", "Eliminar misión");
     del.addEventListener("click", function () {
-      if (!global.confirm("¿Eliminar la quest y su XP asociado?")) return;
+      if (!global.confirm("¿Eliminar la misión y su XP asociado?")) return;
       Q.deleteQuest(q.id);
-      Toast.show("System", "Quest eliminada");
+      Toast.show("System", "Misión eliminada");
     });
-    if (card.querySelector(".quest__actions")) card.querySelector(".quest__actions").appendChild(del);
-    else {
-      var only = el("div", "quest__actions");
-      only.appendChild(del);
-      card.appendChild(only);
-    }
+    actions.appendChild(del);
+    card.appendChild(actions);
 
     return card;
   }
 
-  function renderQuestList(host, list, emptyText) {
+  function renderMissionList(host, list, title, sub) {
     host.textContent = "";
     if (!list.length) {
-      emptyState(host, emptyText, "Crear quest", function () {
-        var f = $("[data-new-form]");
-        f.hidden = false;
+      emptyState(host, title, sub, "Crear misión", function () {
+        $("[data-new-form]").hidden = false;
         $("[data-q-title]").focus();
       });
       return;
@@ -518,15 +558,16 @@
         return (order[a.status] || 0) - (order[b.status] || 0);
       })
       .forEach(function (q) {
-        host.appendChild(questCard(q));
+        host.appendChild(missionCard(q));
       });
   }
 
   function renderQuests() {
     var d = Q.daily();
     var w = Q.weekly();
-    renderQuestList($("[data-daily]"), d, "Sin daily quests · crea la primera");
-    renderQuestList($("[data-weekly]"), w, "Sin weekly quests");
+
+    renderMissionList($("[data-daily]"), d, "No active quests", "Máximo 5 misiones diarias activas.");
+    renderMissionList($("[data-weekly]"), w, "No weekly quests", "Objetivos de la semana con bonus de XP.");
 
     var activeD = d.filter(function (q) {
       return q.status === Q.STATUS.ACTIVE;
@@ -542,7 +583,6 @@
       : "";
   }
 
-  /* ---------- Formulario de nueva quest ---------- */
   var qDraft = { type: "daily" };
 
   function initQuestForm() {
@@ -596,13 +636,14 @@
       });
 
       if (!res.ok) {
-        var msg =
+        Toast.show(
+          "System",
           res.reason === "limit"
-            ? "Máximo " + C.LIMITS.dailyQuests + " daily quests activas"
+            ? "Máximo " + C.LIMITS.dailyQuests + " misiones diarias activas"
             : res.reason === "title"
             ? "Falta el título"
-            : "No se pudo crear la quest";
-        Toast.show("System", msg);
+            : "No se pudo crear la misión"
+        );
         return;
       }
 
@@ -611,50 +652,60 @@
       $("[data-q-target]").value = "1";
       $("[data-q-recurring]").checked = false;
       $("[data-new-form]").hidden = true;
-      Toast.show("System", "Quest creada · " + res.quest.title);
+      Toast.show("System", "Misión creada · " + res.quest.title);
     });
   }
 
   /* =========================================================
-     Bosses
+     BOSSES
      ========================================================= */
   function bossCard(b) {
-    var cat = C.category(b.category);
     var pct = B.progress(b);
     var done = b.status === B.STATUS.DEFEATED;
+    var card = hue(el("div", "boss" + (done ? " boss--done" : "")), b.category);
 
-    var card = el("div", "boss" + (done ? " boss--done" : ""));
-    card.style.setProperty("--h", cat ? cat.hue : 200);
-
-    var head = el("div", "boss__head");
+    var top = el("div", "boss__top");
     var left = el("div");
-    left.appendChild(el("p", "boss__kicker", done ? "Boss derrotado" : "Boss"));
+    left.appendChild(el("p", "kicker", done ? "Boss derrotado" : "Boss"));
     left.appendChild(el("p", "boss__name", b.name));
-    head.appendChild(left);
-    var threat = el("div", "boss__threat");
-    threat.appendChild(el("p", "boss__threat-k", "Amenaza"));
-    threat.appendChild(el("p", "boss__threat-v", b.difficulty));
-    head.appendChild(threat);
-    card.appendChild(head);
+    top.appendChild(left);
+    top.appendChild(el("span", "badge", b.difficulty));
+    card.appendChild(top);
 
     if (b.description) card.appendChild(el("p", "boss__desc", b.description));
 
     var hp = el("div", "boss__hp");
-    var hpTop = el("div", "boss__hp-top");
-    hpTop.appendChild(el("span", "label", done ? "Derrotado" : "HP restante"));
-    hpTop.appendChild(el("span", "boss__hp-v mono", Math.round(done ? 0 : 100 - pct) + "%"));
-    hp.appendChild(hpTop);
-    var bar = el("div", "bar");
-    var fill = el("i", "bar__fill bar__fill--hp");
+    var line = el("div", "boss__hp-line");
+    line.appendChild(el("p", "kicker", done ? "Derrotado" : "HP restante"));
+    line.appendChild(el("p", "boss__hp-v num", Math.round(done ? 0 : 100 - pct) + "%"));
+    hp.appendChild(line);
+    var bar = el("div", "bar bar--hue");
+    var fill = el("i");
     fill.style.width = (done ? 0 : 100 - pct) + "%";
     bar.appendChild(fill);
     hp.appendChild(bar);
     card.appendChild(hp);
 
     if (b.tasks.length) {
-      var list = el("div", "tasks");
+      var head = el("div", "boss__hp-line");
+      head.style.marginTop = "var(--s4)";
+      head.appendChild(el("p", "kicker", "Objetivos"));
+      head.appendChild(
+        el(
+          "p",
+          "micro num",
+          b.tasks.filter(function (t) {
+            return t.done;
+          }).length +
+            "/" +
+            b.tasks.length
+        )
+      );
+      card.appendChild(head);
+
+      var list = el("div", "objectives");
       b.tasks.forEach(function (t) {
-        var row = el("label", "task" + (t.done ? " task--done" : ""));
+        var row = el("label", "objective" + (t.done ? " objective--done" : ""));
         var cb = el("input");
         cb.type = "checkbox";
         cb.checked = t.done;
@@ -663,11 +714,11 @@
           B.completeBossTask(b.id, t.id, cb.checked);
         });
         row.appendChild(cb);
-        row.appendChild(el("span", "task__title", t.title));
+        row.appendChild(el("span", "objective__t", t.title));
         if (!done) {
-          var x = el("button", "task__del", "✕");
+          var x = el("button", "objective__x", "✕");
           x.type = "button";
-          x.setAttribute("aria-label", "Quitar tarea");
+          x.setAttribute("aria-label", "Quitar objetivo");
           x.addEventListener("click", function (ev) {
             ev.preventDefault();
             B.removeTask(b.id, t.id);
@@ -680,26 +731,30 @@
     }
 
     var foot = el("div", "boss__foot");
-    foot.appendChild(el("span", "boss__reward mono", signed(b.xp) + " XP"));
+    var reward = el("div");
+    reward.appendChild(el("p", "kicker", "Recompensa"));
+    reward.appendChild(el("p", "boss__reward num", signed(b.xp) + " XP"));
+    foot.appendChild(reward);
 
     var actions = el("div", "boss__actions");
     if (!done) {
-      var add = el("button", "btn btn--ghost", "+ Tarea");
+      var add = el("button", "btn btn--ghost btn--sm btn--auto", "+ Objetivo");
       add.type = "button";
       add.addEventListener("click", function () {
-        var title = global.prompt("Nueva tarea");
+        var title = global.prompt("Nuevo objetivo");
         if (title) B.addTask(b.id, title);
       });
       actions.appendChild(add);
 
-      var kill = el("button", "btn", "Derrotar");
+      var kill = el("button", "btn btn--sm btn--auto", "Derrotar");
       kill.type = "button";
       kill.addEventListener("click", function () {
         B.defeatBoss(b.id);
       });
       actions.appendChild(kill);
     }
-    var del = el("button", "icon-x", "✕");
+
+    var del = el("button", "icon-btn", "✕");
     del.type = "button";
     del.setAttribute("aria-label", "Eliminar boss");
     del.addEventListener("click", function () {
@@ -719,11 +774,19 @@
     host.textContent = "";
     var list = B.all();
 
+    var openForm = function () {
+      $("[data-boss-form]").hidden = false;
+      $("[data-b-name]").focus();
+    };
+
     if (!list.length) {
-      emptyState(host, "Sin bosses activos", "Crear el primero", function () {
-        $("[data-boss-form]").hidden = false;
-        $("[data-b-name]").focus();
-      });
+      emptyState(
+        host,
+        "No active bosses",
+        "Un boss es un problema grande partido en objetivos.",
+        "Crear boss",
+        openForm
+      );
       return;
     }
 
@@ -739,16 +802,13 @@
         host.appendChild(bossCard(b));
       });
     } else {
-      emptyState(host, "Sin bosses activos", "Crear boss", function () {
-        $("[data-boss-form]").hidden = false;
-        $("[data-b-name]").focus();
-      });
+      emptyState(host, "No active bosses", "Todos derrotados. Define el siguiente.", "Crear boss", openForm);
     }
 
     if (dead.length) {
-      var head = el("div", "section-head");
-      head.appendChild(el("p", "label", "Derrotados"));
-      head.appendChild(el("p", "label", dead.length + " en total"));
+      var head = el("div", "sec");
+      head.appendChild(el("p", "kicker", "Derrotados"));
+      head.appendChild(el("p", "micro", dead.length + " en total"));
       host.appendChild(head);
       dead.forEach(function (b) {
         host.appendChild(bossCard(b));
@@ -785,14 +845,13 @@
     });
 
     $("[data-b-save]").addEventListener("click", function () {
-      var tasks = $("[data-b-tasks]").value.split("\n");
       var res = B.createBoss({
         name: $("[data-b-name]").value,
         description: $("[data-b-desc]").value,
         category: cat.value,
         difficulty: diff.value,
         xp: $("[data-b-xp]").value,
-        tasks: tasks
+        tasks: $("[data-b-tasks]").value.split("\n")
       });
       if (!res.ok) {
         Toast.show("System", res.reason === "name" ? "Falta el nombre" : "No se pudo crear el boss");
@@ -807,31 +866,37 @@
   }
 
   /* =========================================================
-     Skills y logros
+     DESBLOQUEOS
      ========================================================= */
+  var segment = "skills";
+
   function unlockCard(u) {
     var card = el("div", "unlock" + (u.unlocked ? " unlock--on" : ""));
     var top = el("div", "unlock__top");
-    top.appendChild(el("p", "unlock__name", u.name));
-    top.appendChild(el("p", "unlock__state", u.unlocked ? "DESBLOQUEADA" : "BLOQUEADA"));
+    top.appendChild(el("p", "unlock__n", u.name));
+    top.appendChild(
+      el("span", "badge " + (u.unlocked ? "badge--accent" : ""), u.unlocked ? "OK" : "Locked")
+    );
     card.appendChild(top);
-    card.appendChild(el("p", "unlock__desc", u.desc));
+    card.appendChild(el("p", "unlock__d", u.desc));
 
     if (u.unlocked) {
       card.appendChild(
         el(
           "p",
-          "unlock__meta",
-          (u.unlockedAt ? dayLabel(u.unlockedAt) + " · " : "") + (u.xp ? signed(u.xp) + " XP" : "")
+          "unlock__m",
+          [u.unlockedAt ? dayLabel(u.unlockedAt) : "", u.xp ? signed(u.xp) + " XP" : ""]
+            .filter(Boolean)
+            .join(" · ")
         )
       );
     } else {
       var bar = el("div", "bar bar--thin");
-      var fill = el("i", "bar__fill");
+      var fill = el("i");
       fill.style.width = Math.round(u.progress * 100) + "%";
       bar.appendChild(fill);
       card.appendChild(bar);
-      card.appendChild(el("p", "unlock__meta", Math.round(u.progress * 100) + "% del requisito"));
+      card.appendChild(el("p", "unlock__m", Math.round(u.progress * 100) + "% del requisito"));
     }
     return card;
   }
@@ -850,20 +915,44 @@
       achs.appendChild(unlockCard(u));
     });
 
-    $("[data-skills-count]").textContent = c.skills.unlocked + "/" + c.skills.total;
-    $("[data-ach-count]").textContent = c.achievements.unlocked + "/" + c.achievements.total;
+    $("[data-sec-skills]").hidden = segment !== "skills";
+    $("[data-sec-achievements]").hidden = segment !== "achievements";
+    $$("[data-seg-btn]").forEach(function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-seg-btn") === segment ? "true" : "false");
+    });
+
+    $("[data-unlock-count]").textContent =
+      segment === "skills"
+        ? c.skills.unlocked + "/" + c.skills.total + " skills"
+        : c.achievements.unlocked + "/" + c.achievements.total + " logros";
+  }
+
+  function initSegments() {
+    $$("[data-seg-btn]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        segment = b.getAttribute("data-seg-btn");
+        renderUnlocks();
+      });
+    });
   }
 
   /* =========================================================
-     Análisis
+     ANÁLISIS
      ========================================================= */
   var RANGES = [
-    { id: "today", label: "Hoy", days: 1 },
+    { id: "today", label: "Hoy", days: 7 },
     { id: "7d", label: "7 días", days: 7 },
     { id: "30d", label: "30 días", days: 30 },
     { id: "all", label: "Todo", days: 30 }
   ];
   var range = "7d";
+
+  function currentRange() {
+    for (var i = 0; i < RANGES.length; i++) {
+      if (RANGES[i].id === range) return RANGES[i];
+    }
+    return RANGES[1];
+  }
 
   function renderRanges() {
     var host = $("[data-ranges]");
@@ -880,41 +969,55 @@
     });
   }
 
-  function currentRange() {
-    for (var i = 0; i < RANGES.length; i++) {
-      if (RANGES[i].id === range) return RANGES[i];
-    }
-    return RANGES[1];
+  function drawChart(host, xs, series) {
+    var max = series.reduce(function (m, d) {
+      return Math.max(m, d.xp);
+    }, 0);
+    host.textContent = "";
+    xs.textContent = "";
+    var step = series.length > 20 ? 5 : 2;
+
+    series.forEach(function (d, i) {
+      var col = el("div", "chart__col");
+      var bar = el("i", "chart__bar");
+      bar.style.height = (max > 0 ? Math.max(2, (d.xp / max) * 100) : 2) + "%";
+      if (!d.xp) bar.setAttribute("data-zero", "1");
+      bar.title = num(d.xp) + " XP";
+      col.appendChild(bar);
+      host.appendChild(col);
+
+      var day = new Date(d.ts).getDate();
+      xs.appendChild(
+        el("span", null, i % step === 0 || i === series.length - 1 ? String(day) : "")
+      );
+    });
+  }
+
+  function tile(k, v, accent) {
+    var box = el("div", "tile" + (accent ? " tile--accent" : ""));
+    box.appendChild(el("p", "tile__k", k));
+    box.appendChild(el("p", "tile__v num", v));
+    return box;
   }
 
   function renderAnalytics() {
     renderRanges();
     var a = E.getAnalytics(range);
 
-    var kpis = [
-      ["XP", signed(a.xp), true],
-      ["Actividades", num(a.activities), false],
-      ["Quests", num(a.questsCompleted), false],
-      ["Bosses", num(a.bossesDefeated), false],
-      ["Problemas", num(a.problemsSolved), false],
-      ["Racha", a.streak.current + " D", false]
-    ];
     var host = $("[data-kpis]");
     host.textContent = "";
-    kpis.forEach(function (k) {
-      var box = el("div", "kpi" + (k[2] ? " kpi--accent" : ""));
-      box.appendChild(el("p", "kpi__k", k[0]));
-      box.appendChild(el("p", "kpi__v mono", k[1]));
-      host.appendChild(box);
-    });
+    host.appendChild(tile("XP", signed(a.xp), true));
+    host.appendChild(tile("Acciones", num(a.activities)));
+    host.appendChild(tile("Misiones", num(a.questsCompleted)));
+    host.appendChild(tile("Bosses", num(a.bossesDefeated)));
+    host.appendChild(tile("Problemas", num(a.problemsSolved)));
+    host.appendChild(tile("Racha", a.streak.current + " D"));
 
-    /* Serie diaria del rango elegido. */
-    var days = currentRange().days;
-    var series = E.xpSeries(Math.max(7, days));
+    var series = E.xpSeries(currentRange().days);
     $("[data-series-label]").textContent = series.length + " días";
     drawChart($("[data-a-chart]"), $("[data-a-chart-x]"), series);
 
-    /* XP por categoría dentro del rango. */
+    /* XP por categoría */
     var bars = $("[data-cat-bars]");
     bars.textContent = "";
     var maxCat = 0;
@@ -922,7 +1025,7 @@
       maxCat = Math.max(maxCat, a.byCategory[c.id] || 0);
     });
     if (maxCat <= 0) {
-      bars.appendChild(el("p", "empty", "Sin XP en este rango"));
+      bars.appendChild(el("p", "empty__t", "Sin XP en este rango"));
     } else {
       C.CATEGORIES.slice()
         .sort(function (x, y) {
@@ -933,49 +1036,325 @@
           var row = el("div", "cbar");
           row.style.setProperty("--h", c.hue);
           var top = el("div", "cbar__top");
-          top.appendChild(el("span", "cbar__name", c.stat));
-          top.appendChild(el("span", "cbar__v mono", signed(v) + " XP"));
+          top.appendChild(el("span", "cbar__n", c.stat));
+          top.appendChild(el("span", "cbar__v num", signed(v) + " XP"));
           row.appendChild(top);
-          var track = el("div", "cbar__track");
-          var fill = el("span", "cbar__fill");
+          var bar = el("div", "bar bar--thin bar--hue");
+          var fill = el("i");
           fill.style.width = (v > 0 ? Math.max(2, (v / maxCat) * 100) : 0) + "%";
-          track.appendChild(fill);
-          row.appendChild(track);
+          bar.appendChild(fill);
+          row.appendChild(bar);
           bars.appendChild(row);
         });
     }
 
-    /* Crecimiento de stats a 7 días. */
+    /* Crecimiento */
     var g = $("[data-growth]");
     g.textContent = "";
-    var stats = a.snapshot.stats.slice().sort(function (x, y) {
-      return y.growth - x.growth;
-    });
-    stats.forEach(function (st, i) {
+    a.snapshot.stats
+      .slice()
+      .sort(function (x, y) {
+        return y.growth - x.growth;
+      })
+      .forEach(function (st) {
+        var row = el("div", "entry");
+        var dot = el("i", "entry__dot");
+        dot.style.setProperty("--h", st.hue);
+        row.appendChild(dot);
+        var main = el("div", "entry__main");
+        main.appendChild(el("p", "entry__t", st.stat));
+        main.appendChild(
+          el(
+            "p",
+            "entry__m",
+            "LV " + st.level + " · " + num(st.xp) + " XP" +
+              (st.neglected && st.xp > 0 ? " · " + st.daysIdle + "D inactivo" : "")
+          )
+        );
+        row.appendChild(main);
+        var v = el("p", "entry__v num", st.growth > 0 ? "+" + pct1(st.growth) + "%" : "—");
+        if (st.growth <= 0) v.style.color = "var(--text-3)";
+        row.appendChild(v);
+        g.appendChild(row);
+      });
+
+    renderStreaks();
+    renderAnalysis();
+  }
+
+  function renderAnalysis() {
+    var a = E.getAnalytics("30d");
+    var host = $("[data-analysis]");
+    host.textContent = "";
+
+    if (!a.snapshot.entries) {
+      host.appendChild(el("p", "empty__t", "Sin datos · registra tu primera acción"));
+      return;
+    }
+
+    var rows = [
+      ["Más fuerte", a.strongest ? a.strongest.stat + " · LV " + a.strongest.level : "—"],
+      ["Más débil", a.weakest ? a.weakest.stat + " · LV " + a.weakest.level : "—"],
+      [
+        "Mayor crecimiento",
+        a.fastest && a.fastest.growth > 0
+          ? a.fastest.stat + " · +" + pct1(a.fastest.growth) + "% / 7D"
+          : "—"
+      ],
+      ["Abandonadas", a.idle.length ? statNames(a.idle) : "Ninguna"]
+    ];
+    if (a.untouched.length) rows.push(["Sin iniciar", statNames(a.untouched)]);
+
+    rows.forEach(function (r) {
       var row = el("div", "entry");
-      if (i === stats.length - 1) row.style.borderBottom = "0";
-      var dot = el("i", "entry__dot");
-      dot.style.setProperty("--h", st.hue);
-      row.appendChild(dot);
       var main = el("div", "entry__main");
-      main.appendChild(el("p", "entry__title", st.stat));
-      main.appendChild(
-        el("p", "entry__meta", "LV " + st.level + " · " + num(st.xp) + " XP" + (st.neglected && st.xp > 0 ? " · " + st.daysIdle + "D SIN ACTIVIDAD" : ""))
-      );
+      main.appendChild(el("p", "entry__m", r[0]));
+      main.appendChild(el("p", "entry__t entry__t--wrap", r[1]));
       row.appendChild(main);
-      var v = el("p", "entry__xp mono", st.growth > 0 ? "+" + pct1(st.growth) + "%" : "—");
-      if (st.growth <= 0) v.style.color = "var(--faint)";
-      row.appendChild(v);
-      g.appendChild(row);
+      host.appendChild(row);
     });
   }
 
   /* =========================================================
-     Finanzas
+     REGISTRAR
+     ========================================================= */
+  var draft = { category: null, action: null, minutes: "", amount: "", difficulty: "NORMAL" };
+
+  function renderCats() {
+    var host = $("[data-cats]");
+    host.textContent = "";
+    C.CATEGORIES.forEach(function (c) {
+      var b = el("button", "chip", c.stat);
+      b.type = "button";
+      b.setAttribute("aria-pressed", draft.category === c.id ? "true" : "false");
+      b.addEventListener("click", function () {
+        draft.category = c.id;
+        draft.action = null;
+        renderCats();
+        renderActs();
+        renderExtra();
+        renderPreview();
+      });
+      host.appendChild(b);
+    });
+  }
+
+  function renderActs() {
+    var host = $("[data-acts]");
+    host.textContent = "";
+    if (!draft.category) {
+      host.appendChild(el("p", "micro", "Elige una categoría primero"));
+      return;
+    }
+    (C.ACTIONS[draft.category] || []).forEach(function (a) {
+      var b = el("button", "chip");
+      b.type = "button";
+      b.appendChild(document.createTextNode(a.label));
+      b.appendChild(el("span", "chip__x", a.scaled ? "±" : signed(a.xp)));
+      b.setAttribute("aria-pressed", draft.action === a.id ? "true" : "false");
+      b.addEventListener("click", function () {
+        draft.action = a.id;
+        renderActs();
+        renderExtra();
+        renderPreview();
+      });
+      host.appendChild(b);
+    });
+  }
+
+  function field(label, type, value, placeholder, onInput) {
+    var wrap = el("label", "field");
+    wrap.appendChild(el("span", null, label));
+    var input = el("input");
+    input.type = type;
+    input.value = value || "";
+    input.placeholder = placeholder || "";
+    input.inputMode = type === "number" ? "numeric" : "text";
+    input.addEventListener("input", function () {
+      onInput(input.value);
+    });
+    wrap.appendChild(input);
+    return wrap;
+  }
+
+  function renderExtra() {
+    var host = $("[data-extra]");
+    host.textContent = "";
+    var def = C.action(draft.category, draft.action);
+    if (!def) return;
+
+    if (def.input === "min") {
+      host.appendChild(
+        field("Minutos", "number", draft.minutes, "30", function (v) {
+          draft.minutes = v;
+          renderPreview();
+        })
+      );
+    }
+    if (def.input === "amount") {
+      host.appendChild(
+        field("Importe (€)", "number", draft.amount, "200", function (v) {
+          draft.amount = v;
+          renderPreview();
+        })
+      );
+    }
+    if (def.scaled) {
+      var wrap = el("label", "field");
+      wrap.appendChild(el("span", null, "Dificultad"));
+      var sel = el("select");
+      C.DIFFICULTIES.forEach(function (d) {
+        var o = el("option", null, d + " · " + signed(C.DIFFICULTY_XP[d]) + " XP");
+        o.value = d;
+        if (draft.difficulty === d) o.selected = true;
+        sel.appendChild(o);
+      });
+      sel.addEventListener("change", function () {
+        draft.difficulty = sel.value;
+        renderPreview();
+      });
+      wrap.appendChild(sel);
+      host.appendChild(wrap);
+    }
+  }
+
+  function renderPreview() {
+    var xp =
+      draft.category && draft.action
+        ? C.actionXP(draft.category, draft.action, {
+            minutes: draft.minutes,
+            difficulty: draft.difficulty
+          })
+        : 0;
+    $("[data-preview]").textContent = signed(xp) + " XP";
+    $("[data-submit]").disabled = !(draft.category && draft.action);
+    $("[data-log-note]").textContent = draft.category ? C.categoryName(draft.category) : "";
+  }
+
+  function submitDraft() {
+    if (!draft.category || !draft.action) return;
+    var def = C.action(draft.category, draft.action);
+    var meta = null;
+    if (def.input === "min" && draft.minutes) meta = { minutes: Number(draft.minutes) };
+    if (def.input === "amount" && draft.amount) meta = { amount: Number(draft.amount) };
+    if (def.scaled) meta = { difficulty: draft.difficulty };
+
+    var res = E.logActivity({
+      category: draft.category,
+      action: draft.action,
+      notes: $("[data-notes]").value.trim(),
+      minutes: draft.minutes,
+      difficulty: draft.difficulty,
+      meta: meta,
+      source: "quick"
+    });
+
+    if (!res.ok) {
+      Toast.show("System", "No se pudo registrar (" + res.reason + ")");
+      return;
+    }
+
+    draft.action = null;
+    draft.minutes = "";
+    draft.amount = "";
+    $("[data-notes]").value = "";
+    renderActs();
+    renderExtra();
+    renderPreview();
+    go("dashboard");
+  }
+
+  /* =========================================================
+     HISTORIAL
+     ========================================================= */
+  var historyFilter = "";
+
+  function entryRow(t, opts) {
+    opts = opts || {};
+    var row = hue(el("div", "entry"), t.category);
+    row.appendChild(el("i", "entry__dot"));
+
+    var main = el("div", "entry__main");
+    main.appendChild(el("p", "entry__t", t.label || t.action));
+    var bits = [C.categoryName(t.category)];
+    bits.push(opts.compact ? dayLabel(t.ts) + " " + timeLabel(t.ts) : timeLabel(t.ts));
+    if (t.meta && t.meta.minutes) bits.push(t.meta.minutes + " min");
+    if (t.meta && t.meta.amount) bits.push(num(t.meta.amount) + " €");
+    if (t.meta && t.meta.difficulty) bits.push(t.meta.difficulty);
+    if (t.notes) bits.push(t.notes);
+    main.appendChild(el("p", "entry__m", bits.join(" · ")));
+    row.appendChild(main);
+
+    var v = el("p", "entry__v num", signed(t.amount) + " XP");
+    if (t.amount < 0) v.setAttribute("data-neg", "1");
+    row.appendChild(v);
+
+    if (!opts.compact) {
+      var del = el("button", "entry__x", "✕");
+      del.type = "button";
+      del.setAttribute("aria-label", "Eliminar registro");
+      del.addEventListener("click", function () {
+        if (!global.confirm("¿Eliminar este registro? El XP se recalculará.")) return;
+        E.deleteActivity(t.id);
+        Toast.show("System", "Registro eliminado · XP recalculado");
+      });
+      row.appendChild(del);
+    }
+
+    return row;
+  }
+
+  function initFilter() {
+    var sel = $("[data-filter]");
+    C.CATEGORIES.forEach(function (c) {
+      var o = el("option", null, c.stat);
+      o.value = c.id;
+      sel.appendChild(o);
+    });
+    sel.addEventListener("change", function () {
+      historyFilter = sel.value;
+      renderHistory();
+    });
+  }
+
+  function renderHistory() {
+    var host = $("[data-log]");
+    host.textContent = "";
+    var days = E.activityLog({ category: historyFilter || null });
+
+    var count = days.reduce(function (n, d) {
+      return n + d.items.length;
+    }, 0);
+    $("[data-history-count]").textContent = count ? num(count) + " registros" : "";
+
+    if (!days.length) {
+      emptyState(host, "No activity", "Registra tu primera acción.", "Registrar", function () {
+        go("log");
+      });
+      return;
+    }
+
+    days.forEach(function (d) {
+      var box = el("div", "day");
+      var head = el("div", "day__head");
+      head.appendChild(el("p", "day__d", dayLabel(d.ts)));
+      head.appendChild(el("p", "day__v num", signed(d.total) + " XP"));
+      box.appendChild(head);
+
+      var list = el("div", "list");
+      d.items.forEach(function (t) {
+        list.appendChild(entryRow(t));
+      });
+      box.appendChild(list);
+      host.appendChild(box);
+    });
+  }
+
+  /* =========================================================
+     FINANZAS
      ========================================================= */
   var finType = "saving";
 
-  /* Las cifras se pueden ocultar: la app puede abrirse en cualquier sitio. */
   function masked() {
     return !!store.get().settings.maskMoney;
   }
@@ -988,54 +1367,50 @@
     var host = $("[data-fin-summary]");
     host.textContent = "";
 
-    var top = el("div", "worth");
+    var fig = el("div", "figure");
     var left = el("div");
-    left.appendChild(el("p", "label", "Patrimonio"));
-    left.appendChild(el("p", "worth__v mono", money(sum.netWorth)));
-    top.appendChild(left);
-    var flow = el("div");
-    flow.style.textAlign = "right";
-    flow.appendChild(el("p", "label", "Flujo neto"));
-    flow.appendChild(el("p", "mini__v mono", money(sum.flow)));
-    top.appendChild(flow);
-    host.appendChild(top);
+    left.appendChild(el("p", "kicker", "Patrimonio"));
+    left.appendChild(el("p", "figure__v num", money(sum.netWorth)));
+    fig.appendChild(left);
+    var right = el("div", "figure__side");
+    right.appendChild(el("p", "kicker", "Flujo neto"));
+    right.appendChild(el("p", "tile__v num", money(sum.flow)));
+    fig.appendChild(right);
+    host.appendChild(fig);
 
-    var grid = el("div", "worth__grid");
+    var grid = el("div", "tiles");
+    grid.style.marginTop = "var(--s4)";
     [
       ["Ahorro", sum.saving],
       ["Inversión", sum.investment],
       ["Ingresos", sum.income],
       ["Gastos", sum.expense]
     ].forEach(function (r) {
-      var box = el("div", "mini");
-      box.appendChild(el("p", "mini__k", r[0]));
-      box.appendChild(el("p", "mini__v mono", money(r[1])));
-      grid.appendChild(box);
+      grid.appendChild(tile(r[0], money(r[1])));
     });
     host.appendChild(grid);
 
     $("[data-mask-toggle]").textContent = masked() ? "Mostrar cifras" : "Ocultar cifras";
 
-    /* Milestones */
     var ms = $("[data-fin-milestones]");
     ms.textContent = "";
     F.milestones().forEach(function (m) {
       var row = el("div", "ms" + (m.reached ? " ms--on" : ""));
-      row.appendChild(el("span", "ms__v mono", masked() ? "••••" : F.fmt(m.value)));
+      row.appendChild(el("span", "ms__v num", masked() ? "••••" : F.fmt(m.value)));
       var bar = el("div", "bar bar--thin");
-      var fill = el("i", "bar__fill");
+      var fill = el("i");
       fill.style.width = Math.round(m.progress * 100) + "%";
       bar.appendChild(fill);
       row.appendChild(bar);
-      row.appendChild(el("span", "ms__tag", m.reached ? "HECHO" : Math.round(m.progress * 100) + "%"));
+      row.appendChild(el("span", "ms__t", m.reached ? "OK" : Math.round(m.progress * 100) + "%"));
       ms.appendChild(row);
     });
+
     var next = F.nextMilestone();
     $("[data-fin-next]").textContent = next
       ? "siguiente " + (masked() ? "••••" : F.fmt(next))
       : "todos alcanzados";
 
-    /* Chips de tipo */
     var chips = $("[data-fin-types]");
     chips.textContent = "";
     C.FINANCE.types.forEach(function (t) {
@@ -1049,9 +1424,8 @@
       chips.appendChild(b);
     });
 
-    /* Lista */
-    var list = $("[data-fin-list]");
-    list.textContent = "";
+    var listHost = $("[data-fin-list]");
+    listHost.textContent = "";
     var entries = F.all()
       .slice()
       .sort(function (a, b) {
@@ -1060,26 +1434,28 @@
     $("[data-fin-count]").textContent = entries.length ? entries.length + " registros" : "";
 
     if (!entries.length) {
-      emptyState(list, "Sin movimientos", null, null);
+      emptyState(listHost, "Sin movimientos", "Registra un ahorro, ingreso o gasto.");
       return;
     }
 
-    var card = el("div", "card");
-    card.style.padding = "13px";
-    entries.forEach(function (e, i) {
+    var list = el("div", "list");
+    entries.forEach(function (e) {
       var def = F.typeDef(e.type);
       var row = el("div", "entry");
-      if (i === entries.length - 1) row.style.borderBottom = "0";
       var main = el("div", "entry__main");
-      main.appendChild(el("p", "entry__title", def ? def.label : e.type));
+      main.appendChild(el("p", "entry__t", def ? def.label : e.type));
       main.appendChild(
-        el("p", "entry__meta", [dayLabel(e.ts), timeLabel(e.ts), e.note].filter(Boolean).join(" · "))
+        el("p", "entry__m", [dayLabel(e.ts), timeLabel(e.ts), e.note].filter(Boolean).join(" · "))
       );
       row.appendChild(main);
-      var v = el("p", "entry__xp mono", (def && def.sign < 0 ? "−" : "+") + (masked() ? "••••" : F.fmt(e.amount)));
+      var v = el(
+        "p",
+        "entry__v num",
+        (def && def.sign < 0 ? "−" : "+") + (masked() ? "••••" : F.fmt(e.amount))
+      );
       if (def && def.sign < 0) v.setAttribute("data-neg", "1");
       row.appendChild(v);
-      var del = el("button", "entry__del", "✕");
+      var del = el("button", "entry__x", "✕");
       del.type = "button";
       del.setAttribute("aria-label", "Eliminar movimiento");
       del.addEventListener("click", function () {
@@ -1087,9 +1463,9 @@
         F.deleteEntry(e.id);
       });
       row.appendChild(del);
-      card.appendChild(row);
+      list.appendChild(row);
     });
-    list.appendChild(card);
+    listHost.appendChild(list);
   }
 
   function initFinance() {
@@ -1116,43 +1492,36 @@
   }
 
   /* =========================================================
-     Trading
+     TRADING
      ========================================================= */
   function renderTrading() {
     var st = T.stats();
     var host = $("[data-tr-summary]");
     host.textContent = "";
 
-    var top = el("div", "worth");
+    var fig = el("div", "figure");
     var left = el("div");
-    left.appendChild(el("p", "label", "Reglas respetadas"));
-    left.appendChild(el("p", "worth__v mono", pct1(st.discipline) + "%"));
-    top.appendChild(left);
-    var right = el("div");
-    right.style.textAlign = "right";
-    right.appendChild(el("p", "label", "Revisadas"));
-    right.appendChild(el("p", "mini__v mono", st.reviewed + "/" + st.total));
-    top.appendChild(right);
-    host.appendChild(top);
+    left.appendChild(el("p", "kicker", "Reglas respetadas"));
+    left.appendChild(el("p", "figure__v num", pct1(st.discipline) + "%"));
+    fig.appendChild(left);
+    var right = el("div", "figure__side");
+    right.appendChild(el("p", "kicker", "Revisadas"));
+    right.appendChild(el("p", "tile__v num", st.reviewed + "/" + st.total));
+    fig.appendChild(right);
+    host.appendChild(fig);
 
-    var grid = el("div", "worth__grid");
-    [
-      ["Operaciones", st.total],
-      ["Con reglas", st.followed],
-      ["Ganadoras", st.byResult.WIN],
-      ["Perdedoras", st.byResult.LOSS]
-    ].forEach(function (r) {
-      var box = el("div", "mini");
-      box.appendChild(el("p", "mini__k", r[0]));
-      box.appendChild(el("p", "mini__v mono", num(r[1])));
-      grid.appendChild(box);
-    });
+    var grid = el("div", "tiles");
+    grid.style.marginTop = "var(--s4)";
+    grid.appendChild(tile("Operaciones", num(st.total)));
+    grid.appendChild(tile("Con reglas", num(st.followed)));
+    grid.appendChild(tile("Ganadoras", num(st.byResult.WIN)));
+    grid.appendChild(tile("Perdedoras", num(st.byResult.LOSS)));
     host.appendChild(grid);
 
     $("[data-tr-count]").textContent = st.total ? st.total + " operaciones" : "";
 
-    var list = $("[data-tr-list]");
-    list.textContent = "";
+    var listHost = $("[data-tr-list]");
+    listHost.textContent = "";
     var trades = T.all()
       .slice()
       .sort(function (a, b) {
@@ -1160,44 +1529,52 @@
       });
 
     if (!trades.length) {
-      emptyState(list, "Sin operaciones registradas", "Registrar operación", function () {
-        $("[data-tr-form]").hidden = false;
-        $("[data-tr-strategy]").focus();
-      });
+      emptyState(
+        listHost,
+        "Sin operaciones",
+        "El XP premia registrar y respetar tus reglas.",
+        "Registrar operación",
+        function () {
+          $("[data-tr-form]").hidden = false;
+          $("[data-tr-strategy]").focus();
+        }
+      );
       return;
     }
 
     trades.forEach(function (t) {
       var card = el("div", "trade " + (t.rulesFollowed ? "trade--ok" : "trade--broken"));
-      var top2 = el("div", "trade__top");
-      top2.appendChild(el("p", "trade__name", t.strategy));
-      var res = el("p", "trade__res", t.result);
+      var top = el("div", "trade__top");
+      top.appendChild(el("p", "trade__n", t.strategy));
+      var res = el("p", "trade__r", t.result);
       res.style.color =
-        t.result === "WIN" ? "var(--good)" : t.result === "LOSS" ? "var(--bad)" : "var(--faint)";
-      top2.appendChild(res);
-      card.appendChild(top2);
+        t.result === "WIN" ? "var(--ok)" : t.result === "LOSS" ? "var(--bad)" : "var(--text-3)";
+      top.appendChild(res);
+      card.appendChild(top);
 
       var bits = [dayLabel(t.ts)];
       if (t.setup) bits.push(t.setup);
-      if (t.entry) bits.push("IN " + t.entry);
-      if (t.exit) bits.push("OUT " + t.exit);
-      if (t.risk) bits.push("RIESGO " + t.risk);
+      if (t.entry) bits.push("in " + t.entry);
+      if (t.exit) bits.push("out " + t.exit);
+      if (t.risk) bits.push("riesgo " + t.risk);
       if (t.emotion) bits.push(t.emotion);
-      card.appendChild(el("p", "trade__meta", bits.join(" · ")));
+      card.appendChild(el("p", "trade__m", bits.join(" · ")));
 
       if (t.notes) card.appendChild(el("p", "trade__notes", t.notes));
 
       var foot = el("div", "trade__foot");
-      var pills = el("div");
-      pills.style.display = "flex";
-      pills.style.gap = "6px";
+      var pills = el("div", "trade__pills");
       pills.appendChild(
-        el("span", "pill " + (t.rulesFollowed ? "pill--ok" : "pill--bad"), t.rulesFollowed ? "REGLAS OK" : "REGLAS ROTAS")
+        el(
+          "span",
+          "badge " + (t.rulesFollowed ? "badge--ok" : "badge--bad"),
+          t.rulesFollowed ? "Reglas ok" : "Reglas rotas"
+        )
       );
-      if (t.reviewed) pills.appendChild(el("span", "pill", "REVISADA"));
+      if (t.reviewed) pills.appendChild(el("span", "badge", "Revisada"));
       foot.appendChild(pills);
 
-      var del = el("button", "icon-x", "✕");
+      var del = el("button", "icon-btn", "✕");
       del.type = "button";
       del.setAttribute("aria-label", "Eliminar operación");
       del.addEventListener("click", function () {
@@ -1207,7 +1584,7 @@
       foot.appendChild(del);
       card.appendChild(foot);
 
-      list.appendChild(card);
+      listHost.appendChild(card);
     });
   }
 
@@ -1219,6 +1596,7 @@
       if (r === "BREAKEVEN") o.selected = true;
       res.appendChild(o);
     });
+
     var emo = $("[data-tr-emotion]");
     var none = el("option", null, "—");
     none.value = "";
@@ -1262,7 +1640,7 @@
   }
 
   /* =========================================================
-     Bloqueo por PIN
+     BLOQUEO
      ========================================================= */
   var entered = "";
 
@@ -1275,10 +1653,6 @@
     }
   }
 
-  function lockMessage(text) {
-    $("[data-lock-msg]").textContent = text || "";
-  }
-
   function submitPin() {
     var pin = entered;
     entered = "";
@@ -1286,16 +1660,16 @@
     L.verify(pin).then(function (ok) {
       if (ok) {
         L.markUnlocked();
-        lockMessage("");
+        $("[data-lock-msg]").textContent = "";
         showApp();
         return;
       }
       var node = $("[data-lock]");
       node.className = "lock lock--wrong";
-      lockMessage("PIN incorrecto");
+      $("[data-lock-msg]").textContent = "PIN incorrecto";
       global.setTimeout(function () {
         node.className = "lock";
-      }, 340);
+      }, 320);
     });
   }
 
@@ -1307,8 +1681,7 @@
     } else if (entered.length < L.MAX) entered += k;
 
     renderDots();
-    lockMessage("");
-    /* Con la longitud guardada se valida sin pulsar nada más. */
+    $("[data-lock-msg]").textContent = "";
     if (entered.length === L.pinLength()) submitPin();
   }
 
@@ -1337,7 +1710,7 @@
   function showLock() {
     $("[data-lock]").hidden = false;
     $(".app").hidden = true;
-    $(".nav").hidden = true;
+    $("[data-nav]").hidden = true;
     entered = "";
     renderDots();
   }
@@ -1345,13 +1718,13 @@
   function showApp() {
     $("[data-lock]").hidden = true;
     $(".app").hidden = false;
-    $(".nav").hidden = false;
+    $("[data-nav]").hidden = false;
     $("[data-lock-now]").hidden = !L.isEnabled();
     render();
   }
 
   /* =========================================================
-     Ajustes
+     CONFIGURACIÓN
      ========================================================= */
   function renderSettings() {
     var on = L.isEnabled();
@@ -1391,8 +1764,7 @@
     });
 
     $("[data-pin-remove]").addEventListener("click", function () {
-      var pin = $("[data-pin-current]").value.trim();
-      L.removePin(pin).then(function (res) {
+      L.removePin($("[data-pin-current]").value.trim()).then(function (res) {
         $("[data-pin-current]").value = "";
         Toast.show("System", res.ok ? "PIN desactivado" : "PIN incorrecto");
       });
@@ -1408,7 +1780,6 @@
       showLock();
     });
 
-    /* Copia de seguridad: los datos solo existen aquí. */
     $("[data-export]").addEventListener("click", function () {
       var blob = new global.Blob([JSON.stringify(store.get(), null, 2)], {
         type: "application/json"
@@ -1460,29 +1831,48 @@
   }
 
   /* =========================================================
-     Menú de secciones
+     MENÚ (MÁS)
      ========================================================= */
+  var ICONS = {
+    history: "M4 6h16M4 12h16M4 18h10",
+    skills: "M12 3.5l2.3 4.9 5.2.7-3.8 3.7.9 5.2-4.6-2.6-4.6 2.6.9-5.2-3.8-3.7 5.2-.7L12 3.5Z",
+    achievements: "M8 4h8v4.5a4 4 0 0 1-8 0V4Z M12 13v3.5 M8.5 19.5h7 M8 5.5H5.5V7a3 3 0 0 0 3 3 M16 5.5h2.5V7a3 3 0 0 1-3 3",
+    analytics: "M4 19V10M10 19V5M16 19v-6M22 19H2",
+    finance: "M3 7.5h18v9H3v-9Zm0 3.5h18",
+    trading: "M3 16.5l5-5.5 4 3 4-5.5 5 4M3 20.5h18",
+    settings: "M4 8.5h8 M16 8.5h4 M4 15.5h4 M12 15.5h8 M14 6.5v4 M10 13.5v4"
+  };
+
   var SECTIONS = [
-    { view: "history", name: "Historial", desc: "Todas las acciones registradas" },
-    { view: "unlocks", name: "Skills y logros", desc: "Desbloqueos por progresión" },
-    { view: "analytics", name: "Análisis", desc: "XP, rangos, categorías y crecimiento" },
-    { view: "finance", name: "Finanzas", desc: "Ahorro, inversión, patrimonio y milestones" },
-    { view: "trading", name: "Trading", desc: "Journal y disciplina de riesgo" },
-    { view: "settings", name: "Ajustes", desc: "PIN, copia de seguridad y datos" }
+    { view: "history", icon: "history", name: "Historial", desc: "Todas las acciones registradas" },
+    { view: "unlocks", seg: "skills", icon: "skills", name: "Skills", desc: "Habilidades desbloqueadas" },
+    { view: "unlocks", seg: "achievements", icon: "achievements", name: "Logros", desc: "Hitos conseguidos" },
+    { view: "analytics", icon: "analytics", name: "Análisis", desc: "XP, rangos y crecimiento" },
+    { view: "finance", icon: "finance", name: "Finanzas", desc: "Patrimonio y milestones" },
+    { view: "trading", icon: "trading", name: "Trading", desc: "Journal y disciplina" },
+    { view: "settings", icon: "settings", name: "Configuración", desc: "PIN, copia de seguridad y datos" }
   ];
 
   function renderMenu() {
     var host = $("[data-menu]");
     host.textContent = "";
     SECTIONS.forEach(function (sec) {
-      var b = el("button", "menu__item");
+      var b = el("button", "menu-row");
       b.type = "button";
-      var left = el("div");
-      left.appendChild(el("p", "menu__name", sec.name));
-      left.appendChild(el("p", "menu__desc", sec.desc));
-      b.appendChild(left);
-      b.appendChild(el("span", "menu__go", "→"));
+
+      var ico = el("span", "menu-row__ico");
+      ico.innerHTML =
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + ICONS[sec.icon] + '"/></svg>';
+      b.appendChild(ico);
+
+      var main = el("div", "menu-row__main");
+      main.appendChild(el("p", "menu-row__n", sec.name));
+      main.appendChild(el("p", "menu-row__d", sec.desc));
+      b.appendChild(main);
+      b.appendChild(el("span", "menu-row__go", "→"));
+
       b.addEventListener("click", function () {
+        if (sec.seg) segment = sec.seg;
         go(sec.view);
       });
       host.appendChild(b);
@@ -1490,251 +1880,23 @@
   }
 
   /* =========================================================
-     Registrar actividad
-     ========================================================= */
-  var draft = { category: null, action: null, minutes: "", amount: "", difficulty: "NORMAL" };
-
-  function renderCats() {
-    var host = $("[data-cats]");
-    host.textContent = "";
-    C.CATEGORIES.forEach(function (c) {
-      var b = el("button", "chip", c.stat);
-      b.type = "button";
-      b.setAttribute("aria-pressed", draft.category === c.id ? "true" : "false");
-      b.addEventListener("click", function () {
-        draft.category = c.id;
-        draft.action = null;
-        renderCats();
-        renderActs();
-        renderExtra();
-        renderPreview();
-      });
-      host.appendChild(b);
-    });
-  }
-
-  function renderActs() {
-    var host = $("[data-acts]");
-    host.textContent = "";
-    if (!draft.category) {
-      host.appendChild(el("p", "empty", "Elige una categoría"));
-      return;
-    }
-    (C.ACTIONS[draft.category] || []).forEach(function (a) {
-      var b = el("button", "chip");
-      b.type = "button";
-      b.appendChild(document.createTextNode(a.label));
-      var xp = a.scaled ? "±" : signed(a.xp);
-      var s = el("span", "chip__xp", xp);
-      b.appendChild(s);
-      b.setAttribute("aria-pressed", draft.action === a.id ? "true" : "false");
-      b.addEventListener("click", function () {
-        draft.action = a.id;
-        renderActs();
-        renderExtra();
-        renderPreview();
-      });
-      host.appendChild(b);
-    });
-  }
-
-  function renderExtra() {
-    var host = $("[data-extra]");
-    host.textContent = "";
-    var def = C.action(draft.category, draft.action);
-    if (!def) return;
-
-    if (def.input === "min") {
-      host.appendChild(
-        field("Minutos", "number", "min", draft.minutes, "30", function (v) {
-          draft.minutes = v;
-          renderPreview();
-        })
-      );
-    }
-    if (def.input === "amount") {
-      host.appendChild(
-        field("Importe (€)", "number", "amount", draft.amount, "200", function (v) {
-          draft.amount = v;
-          renderPreview();
-        })
-      );
-    }
-    if (def.scaled) {
-      var wrap = el("label", "field");
-      wrap.appendChild(el("span", null, "Dificultad"));
-      var sel = el("select");
-      C.DIFFICULTIES.forEach(function (d) {
-        var o = el("option", null, d + "  ·  " + signed(C.DIFFICULTY_XP[d]) + " XP");
-        o.value = d;
-        if (draft.difficulty === d) o.selected = true;
-        sel.appendChild(o);
-      });
-      sel.addEventListener("change", function () {
-        draft.difficulty = sel.value;
-        renderPreview();
-      });
-      wrap.appendChild(sel);
-      host.appendChild(wrap);
-    }
-  }
-
-  function field(label, type, key, value, placeholder, onInput) {
-    var wrap = el("label", "field");
-    wrap.appendChild(el("span", null, label));
-    var input = el("input");
-    input.type = type;
-    input.value = value || "";
-    input.placeholder = placeholder || "";
-    input.inputMode = type === "number" ? "numeric" : "text";
-    input.addEventListener("input", function () {
-      onInput(input.value);
-    });
-    wrap.appendChild(input);
-    return wrap;
-  }
-
-  function draftXP() {
-    if (!draft.category || !draft.action) return 0;
-    return C.actionXP(draft.category, draft.action, {
-      minutes: draft.minutes,
-      difficulty: draft.difficulty
-    });
-  }
-
-  function renderPreview() {
-    var xp = draftXP();
-    $("[data-preview]").textContent = signed(xp) + " XP";
-    $("[data-submit]").disabled = !(draft.category && draft.action);
-  }
-
-  function submitDraft() {
-    if (!draft.category || !draft.action) return;
-    var notes = $("[data-notes]").value.trim();
-    var def = C.action(draft.category, draft.action);
-
-    var meta = null;
-    if (def.input === "min" && draft.minutes) meta = { minutes: Number(draft.minutes) };
-    if (def.input === "amount" && draft.amount) meta = { amount: Number(draft.amount) };
-    if (def.scaled) meta = { difficulty: draft.difficulty };
-
-    var res = E.logActivity({
-      category: draft.category,
-      action: draft.action,
-      notes: notes,
-      minutes: draft.minutes,
-      difficulty: draft.difficulty,
-      meta: meta,
-      source: "quick"
-    });
-
-    if (!res.ok) {
-      Toast.show("System", "No se pudo registrar (" + res.reason + ")");
-      return;
-    }
-
-    draft.action = null;
-    draft.minutes = "";
-    draft.amount = "";
-    $("[data-notes]").value = "";
-    renderActs();
-    renderExtra();
-    renderPreview();
-    go("dashboard");
-  }
-
-  /* =========================================================
-     Historial
-     ========================================================= */
-  var historyFilter = "";
-
-  function renderFilter() {
-    var sel = $("[data-filter]");
-    if (sel.options.length > 1) return;
-    C.CATEGORIES.forEach(function (c) {
-      var o = el("option", null, c.stat);
-      o.value = c.id;
-      sel.appendChild(o);
-    });
-    sel.addEventListener("change", function () {
-      historyFilter = sel.value;
-      renderHistory();
-    });
-  }
-
-  function renderHistory() {
-    var host = $("[data-log]");
-    host.textContent = "";
-    var days = E.activityLog({ category: historyFilter || null });
-
-    var count = days.reduce(function (n, d) {
-      return n + d.items.length;
-    }, 0);
-    $("[data-history-count]").textContent = count
-      ? num(count) + " registros"
-      : "";
-
-    if (!days.length) {
-      emptyState(host, "Sin actividad registrada", "+ Registrar acción", function () {
-        go("log");
-      });
-      return;
-    }
-
-    days.forEach(function (d) {
-      var box = el("div", "day");
-      var head = el("div", "day__head");
-      head.appendChild(el("p", "day__date", dayLabel(d.ts)));
-      head.appendChild(el("p", "day__total mono", signed(d.total) + " XP"));
-      box.appendChild(head);
-
-      d.items.forEach(function (t) {
-        box.appendChild(entryRow(t));
-      });
-      host.appendChild(box);
-    });
-  }
-
-  function entryRow(t) {
-    var cat = C.category(t.category);
-    var row = el("div", "entry");
-
-    var dot = el("i", "entry__dot");
-    dot.style.setProperty("--h", cat ? cat.hue : 200);
-    row.appendChild(dot);
-
-    var main = el("div", "entry__main");
-    main.appendChild(el("p", "entry__title", t.label || t.action));
-    var bits = [C.categoryName(t.category), timeLabel(t.ts)];
-    if (t.meta && t.meta.minutes) bits.push(t.meta.minutes + " MIN");
-    if (t.meta && t.meta.amount) bits.push(num(t.meta.amount) + " €");
-    if (t.meta && t.meta.difficulty) bits.push(t.meta.difficulty);
-    if (t.notes) bits.push(t.notes);
-    main.appendChild(el("p", "entry__meta", bits.join(" · ")));
-    row.appendChild(main);
-
-    var xp = el("p", "entry__xp mono", signed(t.amount) + " XP");
-    if (t.amount < 0) xp.setAttribute("data-neg", "1");
-    row.appendChild(xp);
-
-    var del = el("button", "entry__del", "✕");
-    del.type = "button";
-    del.title = "Eliminar";
-    del.setAttribute("aria-label", "Eliminar registro");
-    del.addEventListener("click", function () {
-      if (!global.confirm("¿Eliminar este registro? El XP se recalculará.")) return;
-      E.deleteActivity(t.id);
-      Toast.show("System", "Registro eliminado · XP recalculado");
-    });
-    row.appendChild(del);
-
-    return row;
-  }
-
-  /* =========================================================
-     Navegación
+     NAVEGACIÓN
      ========================================================= */
   var current = "dashboard";
+
+  var TITLES = {
+    dashboard: "Estado",
+    quests: "Misiones",
+    bosses: "Bosses",
+    log: "Registrar",
+    unlocks: "Desbloqueos",
+    analytics: "Análisis",
+    finance: "Finanzas",
+    trading: "Trading",
+    history: "Historial",
+    settings: "Configuración",
+    more: "Más"
+  };
 
   function go(view) {
     current = view;
@@ -1742,8 +1904,11 @@
       v.hidden = v.getAttribute("data-view") !== view;
     });
     $$("[data-go]").forEach(function (b) {
-      b.setAttribute("aria-current", b.getAttribute("data-go") === view ? "true" : "false");
+      if (b.classList.contains("nav__btn")) {
+        b.setAttribute("aria-current", b.getAttribute("data-go") === view ? "true" : "false");
+      }
     });
+    $("[data-topbar-view]").textContent = TITLES[view] || "";
     if (global.location.hash !== "#" + view) {
       global.history.replaceState(null, "", "#" + view);
     }
@@ -1751,30 +1916,31 @@
     global.scrollTo(0, 0);
   }
 
-  /* Cada vista se dibuja sola: no se renderiza lo que no se ve. */
+  /* Solo se dibuja la vista visible. */
   function render() {
     if (current === "dashboard") renderDashboard();
     else if (current === "quests") renderQuests();
     else if (current === "bosses") renderBosses();
-    else if (current === "unlocks") renderUnlocks();
-    else if (current === "analytics") renderAnalytics();
-    else if (current === "finance") renderFinance();
-    else if (current === "trading") renderTrading();
-    else if (current === "more") renderMenu();
-    else if (current === "settings") renderSettings();
     else if (current === "log") {
       renderCats();
       renderActs();
       renderExtra();
       renderPreview();
-    } else if (current === "history") renderHistory();
+    } else if (current === "unlocks") renderUnlocks();
+    else if (current === "analytics") renderAnalytics();
+    else if (current === "finance") renderFinance();
+    else if (current === "trading") renderTrading();
+    else if (current === "history") renderHistory();
+    else if (current === "settings") renderSettings();
+    else if (current === "more") renderMenu();
   }
 
   function init() {
     Q.rollover();
-    renderFilter();
+    initFilter();
     initQuestForm();
     initBossForm();
+    initSegments();
     initFinance();
     initTrading();
     initSettings();
@@ -1786,7 +1952,6 @@
         go(b.getAttribute("data-go"));
       });
     });
-    $("[data-submit]").addEventListener("click", submitDraft);
 
     store.subscribe(render);
 

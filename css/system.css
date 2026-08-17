@@ -18,17 +18,20 @@
    1. TOKENS
    ========================================================= */
 :root {
-  /* Superficies */
-  --bg: #05060a;
-  --bg-deep: #030408;
-  --surface: rgba(255, 255, 255, 0.028);
-  --surface-2: rgba(255, 255, 255, 0.05);
-  --surface-3: rgba(255, 255, 255, 0.08);
+  /* Superficies
+     Fondo casi negro con un punto de azul. Los paneles no se aclaran
+     con blanco: son azul-negro sobre el fondo, así el negro sigue
+     siendo negro y las tarjetas se separan igual. */
+  --bg: #03050a;
+  --bg-deep: #010205;
+  --surface: rgba(6, 13, 21, 0.85);
+  --surface-2: rgba(11, 21, 32, 0.9);
+  --surface-3: rgba(17, 30, 43, 0.94);
 
-  /* Bordes */
-  --border: rgba(255, 255, 255, 0.075);
-  --border-2: rgba(255, 255, 255, 0.14);
-  --hairline: rgba(255, 255, 255, 0.04);
+  /* Bordes: teñidos de cyan, muy bajos */
+  --border: rgba(127, 233, 255, 0.11);
+  --border-2: rgba(127, 233, 255, 0.24);
+  --hairline: rgba(127, 233, 255, 0.07);
 
   /* Texto */
   --text: #f4f6f8;
@@ -136,7 +139,7 @@ body::before {
   position: fixed;
   inset: -25% -25% auto -25%;
   height: 60vh;
-  background: radial-gradient(46% 50% at 50% 0%, rgba(127, 233, 255, 0.085), transparent 72%);
+  background: radial-gradient(48% 52% at 50% 0%, rgba(127, 233, 255, 0.11), transparent 74%);
   pointer-events: none;
   z-index: 0;
 }
@@ -146,8 +149,8 @@ body::after {
   content: "";
   position: fixed;
   inset: 0;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.014) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.014) 1px, transparent 1px);
+  background-image: linear-gradient(rgba(127, 233, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(127, 233, 255, 0.02) 1px, transparent 1px);
   background-size: 54px 54px;
   -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 78%);
   mask-image: linear-gradient(180deg, #000 0%, transparent 78%);
@@ -259,7 +262,7 @@ p {
   position: relative;
   height: 6px;
   border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.05);
   overflow: hidden;
 }
 
@@ -795,8 +798,8 @@ select {
   padding: var(--s5) var(--s4) var(--s4);
   background: linear-gradient(
       170deg,
-      hsl(var(--h) 65% 48% / 0.11),
-      rgba(255, 255, 255, 0.012) 48%
+      hsl(var(--h) 65% 48% / 0.13),
+      rgba(255, 255, 255, 0) 48%
     ),
     var(--surface);
   box-shadow: var(--shadow);
@@ -1320,7 +1323,7 @@ select {
   bottom: 0;
   z-index: 40;
   display: flex;
-  background: rgba(6, 8, 13, 0.9);
+  background: rgba(4, 7, 13, 0.92);
   backdrop-filter: blur(20px) saturate(140%);
   -webkit-backdrop-filter: blur(20px) saturate(140%);
   border-top: 1px solid var(--border);
@@ -1585,7 +1588,7 @@ select {
   border: 1px solid var(--border-2);
   border-left: 2px solid var(--accent);
   border-radius: var(--r-sm);
-  background: rgba(8, 11, 17, 0.94);
+  background: rgba(6, 11, 18, 0.95);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   padding: 10px var(--s3);
@@ -1914,7 +1917,7 @@ select {
     padding: 92px var(--s3) var(--s5);
     border-top: 0;
     border-right: 1px solid var(--border);
-    background: linear-gradient(180deg, rgba(8, 11, 17, 0.94), rgba(4, 5, 9, 0.94));
+    background: linear-gradient(180deg, rgba(6, 11, 18, 0.95), rgba(2, 4, 8, 0.95));
     box-shadow: none;
   }
 
@@ -2113,8 +2116,8 @@ select {
   padding: var(--s4);
   background: linear-gradient(
       168deg,
-      rgba(127, 233, 255, 0.075),
-      rgba(255, 255, 255, 0.012) 46%
+      rgba(127, 233, 255, 0.1),
+      rgba(127, 233, 255, 0) 48%
     ),
     var(--surface);
   box-shadow: var(--shadow);

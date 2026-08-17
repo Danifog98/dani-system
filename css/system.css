@@ -2554,7 +2554,7 @@ select {
 
 .attr__top {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--s2);
 }
@@ -2769,7 +2769,7 @@ select {
 
 @media (min-width: 1000px) {
   /* Dos columnas: identidad y control a la izquierda, atributos y
-     actividad a la derecha. */
+     actividad a la derecha. La matriz espera a tener ancho real. */
   .dash {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
     grid-template-areas:
@@ -2812,7 +2812,7 @@ select {
   }
 
   .matrix {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 
   .metrics {
@@ -2821,5 +2821,204 @@ select {
 
   .ps__name {
     font-size: 3.25rem;
+  }
+}
+
+@media (min-width: 1220px) {
+  .matrix {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* ---------- Detalles de HUD del dashboard ---------- */
+.kicker--slash::before {
+  content: "/ ";
+  color: var(--accent);
+  opacity: 0.75;
+}
+
+/* Icono de atributo */
+.ico {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-xs);
+  border: 1px solid hsl(var(--h) 80% 60% / 0.28);
+  background: hsl(var(--h) 80% 55% / 0.12);
+}
+
+.ico svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: hsl(var(--h) 85% 70%);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.attr__id {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.attr__id .attr__n {
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+/* Módulo de racha */
+.streak {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface);
+  padding: var(--s4);
+}
+
+.ring {
+  position: relative;
+  flex: 0 0 auto;
+  width: 92px;
+  height: 92px;
+  display: grid;
+  place-items: center;
+}
+
+.ring__track,
+.ring__fill {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.ring__track {
+  border: 1px solid var(--border-2);
+}
+
+.ring__fill {
+  background: conic-gradient(
+    var(--accent) 0 var(--pct),
+    rgba(255, 255, 255, 0.05) var(--pct) 100%
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+}
+
+.ring__core {
+  position: relative;
+  text-align: center;
+}
+
+.ring__v {
+  font-size: 1.75rem;
+  font-weight: var(--w-black);
+  line-height: 1;
+  color: var(--accent);
+}
+
+.streak__side {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* Semana día a día */
+.week {
+  display: flex;
+  gap: 5px;
+  margin-top: var(--s3);
+}
+
+.week__d {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+}
+
+.week__d i {
+  display: block;
+  height: 22px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.week__d--on i {
+  background: linear-gradient(180deg, var(--accent), var(--accent-deep));
+  box-shadow: 0 0 10px rgba(127, 233, 255, 0.3);
+}
+
+.week__d span {
+  display: block;
+  font-size: 0.5rem;
+  letter-spacing: 0.1em;
+  color: var(--text-3);
+  font-weight: var(--w-bold);
+  margin-top: 4px;
+}
+
+.week__d--on span {
+  color: var(--accent);
+}
+
+/* Siguiente recompensa */
+.nextrw {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: linear-gradient(100deg, var(--accent-wash), var(--surface) 55%);
+  padding: var(--s3) var(--s4);
+}
+
+.nextrw__v {
+  font-size: var(--t-h2);
+  font-weight: var(--w-black);
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+}
+
+.nextrw__x {
+  font-size: var(--t-micro);
+  color: var(--accent);
+  font-weight: var(--w-bold);
+  letter-spacing: 0.1em;
+  text-align: right;
+}
+
+/* Barra segmentada: lectura de HP más "sistema". */
+.bar--seg i {
+  -webkit-mask: repeating-linear-gradient(90deg, #000 0 6px, transparent 6px 8px);
+  mask: repeating-linear-gradient(90deg, #000 0 6px, transparent 6px 8px);
+}
+
+@media (min-width: 1000px) {
+  .dash {
+    grid-template-areas:
+      "sys     sys"
+      "ps      matrix"
+      "pw      matrix"
+      "metrics matrix"
+      "streak  matrix"
+      "arc     mission"
+      "alerts  recent"
+      "next    next";
+  }
+
+  .block--streak {
+    grid-area: streak;
+  }
+
+  .block--next {
+    grid-area: next;
   }
 }

@@ -23,6 +23,29 @@
 
   var clockTimer = null;
 
+  /* Un icono por atributo: ayuda a escanear la matriz de un vistazo. */
+  var ICONS = {
+    physical: "M9 4.5h6M12 4.5v4M7.5 12.5h9M6 9.5v6M18 9.5v6M4.5 11v3M19.5 11v3",
+    combat: "M5 19l7-7M8 5l11 11M15 5h4v4M5.5 15.5L4 20l4.5-1.5",
+    tech: "M9.5 9L7 12l2.5 3M14.5 9L17 12l-2.5 3M13 7l-2 10",
+    knowledge: "M4 5.5h6.5A1.5 1.5 0 0 1 12 7v11a2 2 0 0 0-2-2H4V5.5Zm16 0h-6.5A1.5 1.5 0 0 0 12 7v11a2 2 0 0 1 2-2h6V5.5Z",
+    wealth: "M12 4v16M8.5 7.5h5.5a2.5 2.5 0 0 1 0 5H10a2.5 2.5 0 0 0 0 5h5.5",
+    trading: "M4 16.5l4.5-5 3.5 2.5L17 8l3 2.5M4 20h16",
+    business: "M4 8.5h16v11H4v-11Zm5-3h6v3H9v-3Z",
+    discipline: "M13 3L5 13.5h5L9.5 21 19 10h-5.5L13 3Z",
+    problems: "M9.5 4.5h5v3a2 2 0 0 0 2 2h3v5h-3a2 2 0 0 0-2 2v3h-5v-3a2 2 0 0 0-2-2h-3v-5h3a2 2 0 0 0 2-2v-3Z"
+  };
+
+  function icon(catId) {
+    var h = H();
+    var box = h.el("span", "ico");
+    box.innerHTML =
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' +
+      (ICONS[catId] || ICONS.tech) +
+      '"/></svg>';
+    return box;
+  }
+
   /* =========================================================
      Cabecera del sistema
      Solo indicadores con significado real: la app está abierta,
@@ -252,10 +275,66 @@
       )
     );
     grid.appendChild(metric("Bosses", String(bs.active), bs.active === 1 ? "activo" : "activos"));
-    grid.appendChild(metric("Racha", streak.current + "d", "máx " + streak.best + "d"));
     grid.appendChild(metric("Semana", h.signed(snap.week), "XP natural"));
 
     return grid;
+  }
+
+  /* Racha: anillo con los días seguidos y la semana día a día. */
+  function streakModule() {
+    var h = H();
+    var streak = E.streak(null);
+    var days = E.xpSeries(7);
+    var card = h.el("div", "streak");
+
+    var ring = h.el("div", "ring");
+    var pct = streak.best > 0 ? Math.min(100, (streak.current / streak.best) * 100) : 0;
+    ring.style.setProperty("--pct", Math.max(2, pct) + "%");
+    ring.appendChild(h.el("i", "ring__track"));
+    ring.appendChild(h.el("i", "ring__fill"));
+    var core = h.el("div", "ring__core");
+    core.appendChild(h.el("p", "ring__v num", String(streak.current)));
+    core.appendChild(h.el("p", "kicker", streak.current === 1 ? "día" : "días"));
+    ring.appendChild(core);
+    card.appendChild(ring);
+
+    var side = h.el("div", "streak__side");
+    side.appendChild(h.el("p", "kicker", "Racha actual"));
+    side.appendChild(h.el("p", "micro", "mejor racha · " + streak.best + " días"));
+
+    var week = h.el("div", "week");
+    var names = ["D", "L", "M", "X", "J", "V", "S"];
+    days.forEach(function (d) {
+      var col = h.el("div", "week__d" + (d.xp > 0 ? " week__d--on" : ""));
+      col.appendChild(h.el("i"));
+      col.appendChild(h.el("span", null, names[new Date(d.ts).getDay()]));
+      col.title = h.num(d.xp) + " XP";
+      week.appendChild(col);
+    });
+    side.appendChild(week);
+    card.appendChild(side);
+
+    return card;
+  }
+
+  /* Siguiente recompensa: el próximo nivel, con lo que falta. */
+  function nextReward(snap) {
+    var h = H();
+    var bar = h.el("div", "nextrw");
+    var left = h.el("div");
+    left.appendChild(h.el("p", "kicker", "Next reward"));
+    left.appendChild(
+      h.el("p", "nextrw__v", snap.level.max ? "Nivel máximo" : "Level " + (snap.level.level + 1))
+    );
+    bar.appendChild(left);
+    bar.appendChild(
+      h.el(
+        "p",
+        "nextrw__x num",
+        snap.level.max ? "" : h.num(snap.level.xpToNext) + " XP restantes"
+      )
+    );
+    return bar;
   }
 
   /* =========================================================
@@ -271,7 +350,10 @@
       card.setAttribute("tabindex", "0");
 
       var top = h.el("div", "attr__top");
-      top.appendChild(h.el("p", "attr__n", st.stat));
+      var name = h.el("div", "attr__id");
+      name.appendChild(icon(st.id));
+      name.appendChild(h.el("p", "attr__n", st.stat));
+      top.appendChild(name);
       top.appendChild(h.el("p", "attr__lv num", "LV " + String(st.level).padStart(2, "0")));
       card.appendChild(top);
 
@@ -384,7 +466,7 @@
     top.appendChild(right);
     card.appendChild(top);
 
-    var bar = h.el("div", "bar bar--hue");
+    var bar = h.el("div", "bar bar--hue bar--seg");
     var fill = h.el("i");
     fill.style.width = pct + "%";
     bar.appendChild(fill);
@@ -567,7 +649,7 @@
     var block = h.el("div", "block" + (extraClass ? " " + extraClass : ""));
     if (title) {
       var head = h.el("div", "sec sec--tight");
-      head.appendChild(h.el("p", "kicker", title));
+      head.appendChild(h.el("p", "kicker kicker--slash", title));
       if (note) head.appendChild(note.nodeType ? note : h.el("p", "micro", note));
       block.appendChild(head);
     }
@@ -586,6 +668,7 @@
     dash.appendChild(section(null, null, playerStatus(snap), "block--ps"));
     dash.appendChild(section("Total power", null, powerModule(snap), "block--pw"));
     dash.appendChild(section("Live metrics", "datos reales", liveMetrics(snap), "block--metrics"));
+    dash.appendChild(section("Racha", null, streakModule(), "block--streak"));
     dash.appendChild(section("Current arc", null, arcModule(), "block--arc"));
     dash.appendChild(section("Misión activa", null, activeMission(), "block--mission"));
 
@@ -602,6 +685,7 @@
       global.DS.ui.go("history");
     });
     dash.appendChild(section("Actividad reciente", seeAll, recentActivity(), "block--recent"));
+    dash.appendChild(section(null, null, nextReward(snap), "block--next"));
 
     host.appendChild(dash);
   }

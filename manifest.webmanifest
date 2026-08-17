@@ -1,0 +1,14 @@
+{
+  "name": "DANI SYSTEM",
+  "short_name": "DANI",
+  "description": "Sistema personal de progresión: XP, niveles, rangos, stats, misiones y bosses.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#05060a",
+  "theme_color": "#05060a",
+  "icons": [
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+  ]
+}

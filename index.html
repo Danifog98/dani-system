@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>DANI SYSTEM</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#05060a" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="DANI SYSTEM" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2305060a'/%3E%3Ctext x='16' y='22' font-family='Helvetica,Arial' font-size='15' font-weight='700' fill='%237fe9ff' text-anchor='middle'%3EDS%3C/text%3E%3C/svg%3E" />
+    <link rel="apple-touch-icon" href="icon-180.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="preload" as="font" type="font/woff2" href="fonts/inter-latin.woff2" crossorigin />
+    <link rel="stylesheet" href="css/system.css" />
+  </head>
+  <body>
+    <div class="toasts" data-toasts aria-live="polite"></div>
+
+    <nav class="nav" aria-label="Secciones principales">
+      <button class="nav__btn" type="button" data-go="dashboard" aria-current="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg>
+        Estado
+      </button>
+      <button class="nav__btn" type="button" data-go="quests">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M4 12h9M4 17h6M16 7.5l2 2 4-4M16 16.5l2 2 4-4"/></svg>
+        Misiones
+      </button>
+      <button class="nav__btn" type="button" data-go="log">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Registrar
+      </button>
+      <button class="nav__btn" type="button" data-go="bosses">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 4v6c0 4-3 6.5-7 8-4-1.5-7-4-7-8V7l7-4Z"/><path d="M9.5 10.5h.01M14.5 10.5h.01M9 15c1.8 1.2 4.2 1.2 6 0"/></svg>
+        Bosses
+      </button>
+      <button class="nav__btn nav__btn--extra" type="button" data-go="history">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        Historial
+      </button>
+      <button class="nav__btn nav__btn--extra" type="button" data-go="unlocks">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.4 5.2 5.6.7-4.1 3.9 1 5.6-4.9-2.8-4.9 2.8 1-5.6L4 8.9l5.6-.7L12 3Z"/></svg>
+        Skills
+      </button>
+      <button class="nav__btn nav__btn--extra" type="button" data-go="analytics">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
+        Análisis
+      </button>
+      <button class="nav__btn nav__btn--extra" type="button" data-go="finance">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v10H3V7Zm0 4h18"/><path d="M8 15h.01"/></svg>
+        Finanzas
+      </button>
+      <button class="nav__btn nav__btn--extra" type="button" data-go="trading">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-6 4 3 4-6 5 4"/><path d="M3 21h18"/></svg>
+        Trading
+      </button>
+      <button class="nav__btn nav__btn--more" type="button" data-go="more">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg>
+        Más
+      </button>
+    </nav>
+
+    <div class="lock" data-lock hidden>
+      <div class="lock__panel">
+        <p class="lock__kicker">Dani System</p>
+        <h1 class="lock__title" data-lock-title>Introduce tu PIN</h1>
+        <div class="lock__dots" data-lock-dots aria-hidden="true"></div>
+        <p class="lock__msg" data-lock-msg role="status"></p>
+        <div class="keypad" data-keypad></div>
+      </div>
+    </div>
+
+    <main class="app">
+      <div class="topbar">
+        <div class="topbar__id">
+          <span class="topbar__dot" aria-hidden="true"></span>
+          <span>
+            <span class="topbar__title">Dani System</span>
+            <span class="topbar__state">System online</span>
+          </span>
+        </div>
+        <button class="ghost-btn" type="button" data-lock-now hidden>Bloquear</button>
+      </div>
+
+      <!-- ============ ESTADO ============ -->
+      <section class="view" data-view="dashboard">
+        <div class="dash-grid">
+          <div>
+            <div class="card hud">
+              <div class="hud__row">
+                <div>
+                  <h1 class="hud__name" data-name>DANI</h1>
+                  <p class="hud__level">Level <span data-level>1</span></p>
+                </div>
+                <div class="rank" aria-label="Rank">
+                  <span class="rank__value" data-rank>F</span>
+                  <span class="rank__tag">Rank</span>
+                </div>
+              </div>
+
+              <div class="xp-line">
+                <span class="mono"><strong data-xp-into>0</strong> / <span data-xp-needed>1.000</span> XP</span>
+                <span class="mono" data-xp-next></span>
+              </div>
+              <div class="bar"><i class="bar__fill" data-xp-bar></i></div>
+
+              <div class="hud__grid">
+                <div class="mini power">
+                  <p class="mini__k">Total Power</p>
+                  <p class="mini__v mono" data-power>0</p>
+                </div>
+                <div class="mini">
+                  <p class="mini__k">XP total</p>
+                  <p class="mini__v mono" data-xp-total>0</p>
+                </div>
+                <div class="mini">
+                  <p class="mini__k">Hoy</p>
+                  <p class="mini__v mono" data-xp-today>0</p>
+                </div>
+                <div class="mini">
+                  <p class="mini__k">Esta semana</p>
+                  <p class="mini__v mono" data-xp-week>0</p>
+                </div>
+              </div>
+            </div>
+
+            <div data-alerts></div>
+
+            <div class="section-head">
+              <p class="label">Rachas</p>
+              <p class="label" data-quest-slots></p>
+            </div>
+            <div class="streaks" data-streaks></div>
+          </div>
+
+          <div>
+            <div class="section-head dash-grid__head">
+              <p class="label">Stats</p>
+              <p class="label" data-rank-next></p>
+            </div>
+            <div class="stats" data-stats></div>
+          </div>
+        </div>
+
+        <div class="section-head">
+          <p class="label">XP · 14 días</p>
+          <p class="label" data-month-xp></p>
+        </div>
+        <div class="card">
+          <div class="chart" data-chart></div>
+          <div class="chart__x" data-chart-x></div>
+        </div>
+
+        <div class="section-head">
+          <p class="label">Análisis del sistema</p>
+        </div>
+        <div class="card" data-analysis></div>
+      </section>
+
+      <!-- ============ MISIONES ============ -->
+      <section class="view" data-view="quests" hidden>
+        <div class="section-head" style="margin-top:14px">
+          <p class="label">Daily quests</p>
+          <p class="label" data-daily-count></p>
+        </div>
+        <div data-daily></div>
+
+        <div class="section-head">
+          <p class="label">Weekly quests</p>
+          <p class="label" data-weekly-count></p>
+        </div>
+        <div data-weekly></div>
+
+        <div class="section-head">
+          <p class="label">Nueva quest</p>
+          <button class="ghost-btn" type="button" data-new-toggle>Crear</button>
+        </div>
+        <div class="card" data-new-form hidden>
+          <div class="chips" data-q-type>
+            <button class="chip" type="button" data-qtype="daily" aria-pressed="true">Daily</button>
+            <button class="chip" type="button" data-qtype="weekly">Weekly</button>
+          </div>
+
+          <label class="field">
+            <span>Título</span>
+            <input data-q-title placeholder="Entrenar 60 minutos" />
+          </label>
+
+          <div class="row-2">
+            <label class="field">
+              <span>Categoría</span>
+              <select data-q-cat></select>
+            </label>
+            <label class="field">
+              <span>Dificultad</span>
+              <select data-q-diff></select>
+            </label>
+          </div>
+
+          <div class="row-2">
+            <label class="field">
+              <span>XP</span>
+              <input data-q-xp type="number" inputmode="numeric" />
+            </label>
+            <label class="field">
+              <span>Objetivo (veces)</span>
+              <input data-q-target type="number" inputmode="numeric" value="1" min="1" />
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Descripción (opcional)</span>
+            <input data-q-desc placeholder="Pierna · 60 min" />
+          </label>
+
+          <label class="check">
+            <input type="checkbox" data-q-recurring />
+            <span>Repetir cada periodo</span>
+          </label>
+
+          <button class="btn" type="button" data-q-save style="margin-top:14px">Crear quest</button>
+        </div>
+      </section>
+
+      <!-- ============ REGISTRAR ============ -->
+      <section class="view" data-view="log" hidden>
+        <div class="section-head" style="margin-top:14px">
+          <p class="label">Registrar actividad</p>
+        </div>
+        <div class="card">
+          <p class="label" style="margin-bottom:8px">Categoría</p>
+          <div class="chips" data-cats></div>
+
+          <p class="label" style="margin:16px 0 8px">Acción</p>
+          <div class="chips" data-acts></div>
+
+          <div data-extra></div>
+
+          <label class="field">
+            <span>Notas (opcional)</span>
+            <textarea data-notes placeholder="Ej.: press banca 5x5, +2,5 kg"></textarea>
+          </label>
+
+          <div class="xp-line" style="margin:16px 0 10px">
+            <span class="label">Recompensa</span>
+            <strong class="mono" data-preview>+0 XP</strong>
+          </div>
+          <button class="btn" type="button" data-submit disabled>Registrar</button>
+        </div>
+      </section>
+
+      <!-- ============ BOSSES ============ -->
+      <section class="view" data-view="bosses" hidden>
+        <div class="section-head" style="margin-top:14px">
+          <p class="label">Bosses activos</p>
+          <button class="ghost-btn" type="button" data-boss-toggle>Crear</button>
+        </div>
+
+        <div class="card" data-boss-form hidden>
+          <label class="field" style="margin-top:0">
+            <span>Nombre del boss</span>
+            <input data-b-name placeholder="Web de FOG" />
+          </label>
+          <div class="row-2">
+            <label class="field">
+              <span>Categoría</span>
+              <select data-b-cat></select>
+            </label>
+            <label class="field">
+              <span>Dificultad</span>
+              <select data-b-diff></select>
+            </label>
+          </div>
+          <div class="row-2">
+            <label class="field">
+              <span>XP total</span>
+              <input data-b-xp type="number" inputmode="numeric" />
+            </label>
+            <label class="field">
+              <span>Descripción</span>
+              <input data-b-desc placeholder="Opcional" />
+            </label>
+          </div>
+          <label class="field">
+            <span>Tareas (una por línea)</span>
+            <textarea data-b-tasks placeholder="Corregir navegación&#10;Corregir checkout&#10;Probar pagos&#10;Lanzar"></textarea>
+          </label>
+          <button class="btn" type="button" data-b-save style="margin-top:14px">Crear boss</button>
+        </div>
+
+        <div data-boss-list></div>
+      </section>
+
+      <!-- ============ SKILLS Y LOGROS ============ -->
+      <section class="view" data-view="unlocks" hidden>
+        <div class="section-head" style="margin-top:14px">
+          <p class="label">Skills</p>
+          <p class="label" data-skills-count></p>
+        </div>
+        <div class="unlocks" data-skills></div>
+
+        <div class="section-head">
+          <p class="label">Logros</p>
+          <p class="label" data-ach-count></p>
+        </div>
+        <div class="unlocks" data-achievements></div>
+      </section>
+
+      <!-- ============ MÁS ============ -->
+      <section class="view" data-view="more" hidden>
+        <div class="section-head" style="margin-top:14px">
+          <p class="label">Secciones</p>
+        </div>
+        <div class="menu" data-menu></div>
+      </section>
+
+      <!-- ============ ANÁLISIS ============ -->
+      <section class="view" data-view="analytics" hidden>
+        <div class="section-head" style="margin-top:14px">
+          <p class="label">Análisis</p>
+        </div>
+        <div class="chips" data-ranges></div>
+
+        <div class="kpis" data-kpis style="margin-top:12px"></div>
+
+        <div class="section-head">
+          <p class="label">XP por día</p>
+          <p class="label" data-series-label></p>
+        </div>
+        <div class="card">
+          <div class="chart" data-a-chart></div>
+          <div class="chart__x" data-a-chart-x></div>
+        </div>
+
+        <div class="section-head">
+          <p class="label">XP por categoría</p>
+        </div>
+        <div class="card" data-cat-bars></div>
+
+        <div class="section-head">
+          <p class="label">Crecimiento de stats</p>
+        </div>
+        <div class="card" data-growth></div>
+      </section>
+
+      <!-- ============ FINANZAS ============ -->
+      <section class="view" data-view="finance" hidden>
+        <div class="section-head" style="margin-top:14px">
+          <p class="label">Patrimonio</p>
+          <button class="ghost-btn" type="button" data-mask-toggle>Ocultar cifras</button>
+        </div>
+        <div class="card" data-fin-summary></div>
+
+        <div class="section-head">
+          <p class="label">Milestones</p>
+          <p class="label" data-fin-next></p>
+        </div>
+        <div class="card" data-fin-milestones></div>
+
+        <div class="section-head">
+          <p class="label">Nuevo movimiento</p>
+        </div>
+        <div class="card">
+          <div class="chips" data-fin-types></div>
+          <div class="row-2">
+            <label class="field">
+              <span>Importe</span>
+              <input data-fin-amount type="number" inputmode="decimal" placeholder="200" />
+            </label>
+            <label class="field">
+              <span>Nota</span>
+              <input data-fin-note placeholder="Opcional" />
+            </label>
+          </div>
+          <button class="btn" type="button" data-fin-save style="margin-top:14px">Registrar movimiento</button>
+        </div>
+
+        <div class="section-head">
+          <p class="label">Movimientos</p>
+          <p class="label" data-fin-count></p>
+        </div>
+        <div data-fin-list></div>
+      </section>
+
+      <!-- ============ TRADING ============ -->
+      <section class="view" data-view="trading" hidden>
+        <div class="section-head" style="margin-top:14px">
+          <p class="label">Disciplina</p>
+          <p class="label" data-tr-count></p>
+        </div>
+        <div class="card" data-tr-summary></div>
+
+        <div class="section-head">
+          <p class="label">Nueva operación</p>
+          <button class="ghost-btn" type="button" data-tr-toggle>Registrar</button>
+        </div>
+        <div class="card" data-tr-form hidden>
+          <div class="row-2">
+            <label class="field" style="margin-top:0">
+              <span>Estrategia</span>
+              <input data-tr-strategy placeholder="Ruptura de rango" />
+            </label>
+            <label class="field" style="margin-top:0">
+              <span>Setup</span>
+              <input data-tr-setup placeholder="H4 · retest" />
+            </label>
+          </div>
+          <div class="row-2">
+            <label class="field">
+              <span>Entrada</span>
+              <input data-tr-entry placeholder="1.0820" />
+            </label>
+            <label class="field">
+              <span>Salida</span>
+              <input data-tr-exit placeholder="1.0865" />
+            </label>
+          </div>
+          <div class="row-2">
+            <label class="field">
+              <span>Resultado</span>
+              <select data-tr-result></select>
+            </label>
+            <label class="field">
+              <span>Riesgo</span>
+              <input data-tr-risk placeholder="1% · 1R" />
+            </label>
+          </div>
+          <label class="field">
+            <span>Estado emocional</span>
+            <select data-tr-emotion></select>
+          </label>
+          <label class="field">
+            <span>Notas</span>
+            <textarea data-tr-notes placeholder="Qué salió bien y qué no"></textarea>
+          </label>
+          <label class="check">
+            <input type="checkbox" data-tr-rules checked />
+            <span>Respeté mis reglas de riesgo</span>
+          </label>
+          <label class="check">
+            <input type="checkbox" data-tr-reviewed />
+            <span>He revisado la operación</span>
+          </label>
+          <p class="form-hint">El XP premia registrar y respetar las reglas. El resultado no da XP.</p>
+          <button class="btn" type="button" data-tr-save style="margin-top:12px">Guardar operación</button>
+        </div>
+
+        <div class="section-head">
+          <p class="label">Operaciones</p>
+        </div>
+        <div data-tr-list></div>
+      </section>
+
+      <!-- ============ AJUSTES ============ -->
+      <section class="view" data-view="settings" hidden>
+        <div class="section-head" style="margin-top:14px">
+          <p class="label">Bloqueo por PIN</p>
+          <p class="label" data-pin-state></p>
+        </div>
+        <div class="card">
+          <p class="form-hint" style="margin-top:0">
+            El PIN impide que se abra el sistema desde el navegador de otra
+            persona. No cifra los datos: siguen guardados en este dispositivo.
+          </p>
+          <div data-pin-off>
+            <div class="row-2">
+              <label class="field">
+                <span>PIN nuevo (4–8 dígitos)</span>
+                <input data-pin-new type="password" inputmode="numeric" autocomplete="off" />
+              </label>
+              <label class="field">
+                <span>Repetir PIN</span>
+                <input data-pin-rep type="password" inputmode="numeric" autocomplete="off" />
+              </label>
+            </div>
+            <button class="btn" type="button" data-pin-set style="margin-top:14px">Activar PIN</button>
+          </div>
+          <div data-pin-on hidden>
+            <label class="field" style="margin-top:0">
+              <span>PIN actual</span>
+              <input data-pin-current type="password" inputmode="numeric" autocomplete="off" />
+            </label>
+            <div class="row-2" style="margin-top:14px">
+              <button class="btn btn--ghost" type="button" data-pin-lock>Bloquear ahora</button>
+              <button class="btn btn--danger" type="button" data-pin-remove>Quitar PIN</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-head">
+          <p class="label">Datos</p>
+          <p class="label" data-data-size></p>
+        </div>
+        <div class="card">
+          <p class="form-hint" style="margin-top:0">
+            Todo vive en este navegador. Si borras los datos del sitio o cambias
+            de móvil, se pierde: exporta de vez en cuando.
+          </p>
+          <div class="row-2" style="margin-top:14px">
+            <button class="btn btn--ghost" type="button" data-export>Exportar copia</button>
+            <button class="btn btn--ghost" type="button" data-import>Importar copia</button>
+          </div>
+          <input data-import-file type="file" accept="application/json" hidden />
+          <button class="btn btn--danger" type="button" data-reset style="margin-top:10px">Borrar todo</button>
+        </div>
+      </section>
+
+      <!-- ============ HISTORIAL ============ -->
+      <section class="view" data-view="history" hidden>
+        <div class="section-head" style="margin-top:14px">
+          <p class="label">Historial</p>
+          <p class="label" data-history-count></p>
+        </div>
+        <div class="card" style="padding:13px">
+          <label class="field" style="margin:0">
+            <span>Filtrar por categoría</span>
+            <select data-filter>
+              <option value="">Todas</option>
+            </select>
+          </label>
+        </div>
+        <div style="margin-top:12px" data-log></div>
+      </section>
+    </main>
+
+    <div class="flash" data-flash hidden>
+      <div>
+        <p class="flash__k" data-flash-k>Level Up</p>
+        <p class="flash__v" data-flash-v>2</p>
+        <p class="flash__sub" data-flash-sub></p>
+      </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/store.js"></script>
+    <script src="js/lock.js"></script>
+    <script src="js/engine.js"></script>
+    <script src="js/quests.js"></script>
+    <script src="js/bosses.js"></script>
+    <script src="js/progress.js"></script>
+    <script src="js/finance.js"></script>
+    <script src="js/trading.js"></script>
+    <script src="js/recommend.js"></script>
+    <script src="js/ui.js"></script>
+  </body>
+</html>
